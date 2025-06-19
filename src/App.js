@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import Sidebar from "./components/Sidebar";
 import GridCanvas from "./components/GridCanvas";
 import SaveMenu from "./components/SaveMenu";
-import BouncingPhysics from "./components/BouncingPhysics";
+
 import IndexedDBManager from "./utils/IndexedDBManager";
 import { getAvailableAssets } from "./utils/AssetScanner";
 import "./index.css";
@@ -13,7 +13,7 @@ function App() {
   const [shapes, setShapes] = useState([]);
   const [drawingMode, setDrawingMode] = useState('select'); // 'select', 'rectangle', 'circle', 'line'
   const [currentShapeType, setCurrentShapeType] = useState('boundary'); // 'boundary', 'hitbox', 'trigger'
-  const [bouncingEnabled, setBouncingEnabled] = useState(true);
+
 
   // Load available assets on startup
   useEffect(() => {
@@ -92,12 +92,7 @@ function App() {
 
   return (
     <div className="app-container">
-      <BouncingPhysics 
-        canvasAssets={canvasAssets}
-        setCanvasAssets={setCanvasAssets}
-        shapes={shapes}
-        enabled={bouncingEnabled}
-      />
+
       
       <div className="top-bar">
         <div className="top-bar-content">
@@ -141,40 +136,9 @@ function App() {
           </div>
           
           <div className="tool-section">
-            <button 
-              className={`tool-button ${bouncingEnabled ? 'active' : ''}`}
-              onClick={() => setBouncingEnabled(!bouncingEnabled)}
-              style={{ 
-                marginTop: '8px',
-                background: bouncingEnabled ? 'linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffeaa7)' : '#404040',
-                backgroundSize: '400% 400%',
-                animation: bouncingEnabled ? 'rainbow 2s ease infinite' : 'none',
-                color: 'white',
-                fontWeight: 'bold',
-                textShadow: bouncingEnabled ? '0 0 10px rgba(255,255,255,0.5)' : 'none'
-              }}
-            >
-              {bouncingEnabled ? '🎆 EPIC BOUNCING! 🎆' : '▶️ Start Bouncing'}
-            </button>
-            
-            {bouncingEnabled && (
-              <div style={{
-                marginTop: '8px',
-                padding: '8px',
-                background: 'linear-gradient(45deg, rgba(255,107,107,0.2), rgba(78,205,196,0.2))',
-                borderRadius: '4px',
-                fontSize: '11px',
-                color: '#fff',
-                textAlign: 'center',
-                animation: 'pulse 1.5s ease-in-out infinite'
-              }}>
-                🌈 Rainbow Colors<br/>
-                💥 Particle Explosions<br/>
-                ⚡ Speed Boosts<br/>
-                🎯 Wall Bouncing<br/>
-                🔄 Epic Rotation
-              </div>
-            )}
+            <p style={{ color: '#888', fontSize: '12px', fontStyle: 'italic', margin: '16px 0' }}>
+              Clean game engine ready for development
+            </p>
           </div>
           
           <div className="tool-section">

@@ -991,9 +991,19 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
 
   // Handle shape change
   const handleShapeChange = (updatedShape) => {
-    setShapes((prev) =>
-      prev.map((shape) => (shape.id === updatedShape.id ? updatedShape : shape))
-    );
+    // Check if it's an asset or a shape
+    const isAsset = canvasAssets.find(asset => asset.id === updatedShape.id);
+    const isShape = shapes.find(shape => shape.id === updatedShape.id);
+    
+    if (isAsset) {
+      setCanvasAssets((prev) =>
+        prev.map((asset) => (asset.id === updatedShape.id ? updatedShape : asset))
+      );
+    } else if (isShape) {
+      setShapes((prev) =>
+        prev.map((shape) => (shape.id === updatedShape.id ? updatedShape : shape))
+      );
+    }
   };
 
   // Handle coordinate click to copy or insert into AI chat

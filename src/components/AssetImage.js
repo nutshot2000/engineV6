@@ -14,74 +14,22 @@ const AssetImage = ({ asset, isSelected, onSelect, onChange, onContextMenu }) =>
     }
   }, [isSelected, asset.locked]);
 
-  // Calculate dynamic properties for bouncing objects
-  const isBouncingObject = asset.vx || asset.vy || asset.bouncing;
-  const dynamicScale = asset.scale || 1;
-  const dynamicRotation = asset.rotation || 0;
-  const glowIntensity = isBouncingObject ? Math.abs((asset.vx || 0) + (asset.vy || 0)) / 20 : 0;
+  // Simple rotation handling
+  const rotation = asset.rotation || 0;
   
-  // Create trail effect for bouncing objects
-  const renderTrail = () => {
-    if (!isBouncingObject || !asset.trail) return null;
-    
-    const trailPoints = asset.trail.slice(-10); // Last 10 positions
-    if (trailPoints.length < 2) return null;
-    
-    return trailPoints.map((point, index) => {
-      const opacity = (index / trailPoints.length) * 0.5;
-      const size = (index / trailPoints.length) * dynamicScale * 0.5;
-      
-      return (
-        <KonvaImage
-          key={`trail-${index}`}
-          image={image}
-          x={point.x}
-          y={point.y}
-          width={(asset.width || 100) * size}
-          height={(asset.height || 100) * size}
-          rotation={dynamicRotation}
-          opacity={opacity}
-          listening={false} // Don't interfere with interactions
-        />
-      );
-    });
-  };
 
-  // Create particle effects
-  const renderParticles = () => {
-    if (!asset.particles) return null;
-    
-    return asset.particles.map((particle, index) => (
-      <KonvaImage
-        key={`particle-${index}`}
-        x={particle.x}
-        y={particle.y}
-        width={particle.size}
-        height={particle.size}
-        fill={particle.color}
-        opacity={particle.life}
-        listening={false}
-      />
-    ));
-  };
 
   return (
     <Group>
-      {/* Render trail effect behind the main image */}
-      {renderTrail()}
-      
-      {/* Render particle effects */}
-      {renderParticles()}
-      
-      {/* Main image with epic effects */}
+      {/* Main image */}
       <KonvaImage
         image={image}
         x={asset.x}
         y={asset.y}
-        width={(asset.width || 100) * dynamicScale}
-        height={(asset.height || 100) * dynamicScale}
-        rotation={dynamicRotation}
-        draggable={!asset.locked && !isBouncingObject} // Don't allow dragging bouncing objects
+        width={asset.width || 100}
+        height={asset.height || 100}
+        rotation={rotation}
+        draggable={!asset.locked} // Always draggable unless locked
         onClick={onSelect}
         onTap={onSelect}
         onContextMenu={(e) => {
@@ -90,58 +38,49 @@ const AssetImage = ({ asset, isSelected, onSelect, onChange, onContextMenu }) =>
         }}
         ref={shapeRef}
         onDragEnd={e => {
-          if (!asset.locked && !isBouncingObject) {
+          if (!asset.locked) {
             onChange({ ...asset, x: e.target.x(), y: e.target.y() });
           }
         }}
         onTransformEnd={e => {
-          if (!asset.locked && !isBouncingObject) {
+          if (!asset.locked) {
             const node = shapeRef.current;
             const scaleX = node.scaleX();
             const scaleY = node.scaleY();
-            onChange({
+            const rotation = node.rotation();
+            
+            const newWidth = Math.max(10, (asset.width || 100) * scaleX);
+            const newHeight = Math.max(10, (asset.height || 100) * scaleY);
+            
+                          onChange({
               ...asset,
               x: node.x(),
               y: node.y(),
-              width: Math.max(10, node.width() * scaleX),
-              height: Math.max(10, node.height() * scaleY),
-              rotation: node.rotation()
+              width: newWidth,
+              height: newHeight,
+              rotation: rotation
             });
+            
+            // Reset transform
             node.scaleX(1);
             node.scaleY(1);
           }
         }}
-        // Epic visual effects
+        // Visual effects
         stroke={
           asset.locked 
             ? "#ff9800" // Orange for locked
             : isSelected 
               ? "#007acc" // Blue for selected
-              : isBouncingObject
-                ? `hsl(${asset.hue || 0}, 100%, 50%)` // Rainbow for bouncing
-                : undefined
+              : undefined
         }
-        strokeWidth={
-          asset.locked || isSelected ? 2 : 
-          isBouncingObject ? Math.max(2, glowIntensity * 2) : 0
-        }
+        strokeWidth={asset.locked || isSelected ? 2 : 0}
         strokeDashArray={asset.locked ? [4, 4] : undefined}
         opacity={asset.locked ? 0.7 : 1}
-        // Add glow effect for bouncing objects
-        shadowColor={isBouncingObject ? `hsl(${asset.hue || 0}, 100%, 50%)` : undefined}
-        shadowBlur={isBouncingObject ? Math.max(10, glowIntensity * 10) : 0}
-        shadowOpacity={isBouncingObject ? 0.8 : 0}
-        shadowOffsetX={0}
-        shadowOffsetY={0}
-        // Add brightness and saturation effects
-        filters={isBouncingObject ? [
-          // Custom filter effects would go here if Konva supported them
-          // For now, we'll use stroke and shadow for visual impact
-        ] : undefined}
       />
       
-      {/* Enhanced transformer for non-bouncing objects */}
-      {isSelected && !asset.locked && !isBouncingObject && (
+      {/* Enhanced transformer for selected objects */}
+      {isSelected && !asset.locked && (
         <Transformer
           ref={trRef}
           rotateEnabled={true}
@@ -151,25 +90,19 @@ const AssetImage = ({ asset, isSelected, onSelect, onChange, onContextMenu }) =>
             "bottom-left", "bottom-center", "bottom-right"
           ]}
           borderStroke="#007acc"
-          borderStrokeWidth={1}
+          borderStrokeWidth={2}
           anchorStroke="#007acc"
           anchorFill="#ffffff"
-          anchorSize={6}
+          anchorSize={8}
+          boundBoxFunc={(oldBox, newBox) => {
+            // Minimum size constraints
+            if (newBox.width < 10) newBox.width = 10;
+            if (newBox.height < 10) newBox.height = 10;
+            return newBox;
+          }}
         />
       )}
-      
-      {/* Special indicator for bouncing objects */}
-      {isBouncingObject && (
-        <KonvaImage
-          x={asset.x - 10}
-          y={asset.y - 10}
-          width={20}
-          height={20}
-          fill={`hsl(${asset.hue || 0}, 100%, 70%)`}
-          opacity={0.6 + Math.sin(Date.now() / 200) * 0.3} // Pulsing effect
-          listening={false}
-        />
-      )}
+
     </Group>
   );
 };

@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
 
-const BouncingPhysics = ({ canvasAssets, setCanvasAssets, shapes, enabled = true }) => {
+const BouncingPhysics = ({ canvasAssets, setCanvasAssets, shapes, enabled = false }) => {
   const trailsRef = useRef({});
   const particlesRef = useRef([]);
 
   useEffect(() => {
+    // COMPLETELY DISABLE PHYSICS if not enabled
     if (!enabled) return;
 
     // Enhanced detection - look for political figures or objects with bouncing property
@@ -116,6 +117,11 @@ const BouncingPhysics = ({ canvasAssets, setCanvasAssets, shapes, enabled = true
               asset.name.toLowerCase().includes('sanders')
             ));
 
+          // NEVER interfere with manually transformed objects
+          if (asset.userWidth !== undefined || asset.userHeight !== undefined || asset.userRotation !== undefined) {
+            return asset;
+          }
+
           if (!shouldBounce) return asset;
 
           // Initialize fancy properties if not present
@@ -146,18 +152,14 @@ const BouncingPhysics = ({ canvasAssets, setCanvasAssets, shapes, enabled = true
           const objectWidth = (asset.width || 100) * scale;
           const objectHeight = (asset.height || 100) * scale;
 
-          let bounced = false;
-
           // Bounce off left/right walls with EPIC effects
           if (newX <= 0) {
             newX = 0;
             vx = Math.abs(vx) * 1.1; // Speed boost on bounce!
-            bounced = true;
             createParticles(newX, newY, `hsl(${hue}, 100%, 50%)`);
           } else if (newX + objectWidth >= canvasWidth) {
             newX = canvasWidth - objectWidth;
             vx = -Math.abs(vx) * 1.1; // Speed boost on bounce!
-            bounced = true;
             createParticles(newX, newY, `hsl(${hue}, 100%, 50%)`);
           }
 
@@ -165,12 +167,10 @@ const BouncingPhysics = ({ canvasAssets, setCanvasAssets, shapes, enabled = true
           if (newY <= 0) {
             newY = 0;
             vy = Math.abs(vy) * 1.1; // Speed boost on bounce!
-            bounced = true;
             createParticles(newX, newY, `hsl(${hue}, 100%, 50%)`);
           } else if (newY + objectHeight >= canvasHeight) {
             newY = canvasHeight - objectHeight;
             vy = -Math.abs(vy) * 1.1; // Speed boost on bounce!
-            bounced = true;
             createParticles(newX, newY, `hsl(${hue}, 100%, 50%)`);
           }
 
@@ -215,22 +215,29 @@ const BouncingPhysics = ({ canvasAssets, setCanvasAssets, shapes, enabled = true
             }
           });
 
-          return {
+          // NEVER override user-set dimensions or transforms
+          const updates = {
             ...asset,
             x: newX,
             y: newY,
             vx: vx,
             vy: vy,
-            rotation: rotation,
             rotationSpeed: rotationSpeed,
-            scale: scale,
             scaleDirection: scaleDirection,
-            hue: hue,
-            // Add visual effects
-            filter: `hue-rotate(${hue}deg) saturate(1.5) brightness(1.2) drop-shadow(0 0 20px hsl(${hue}, 100%, 50%))`,
-            transform: `rotate(${rotation}deg) scale(${scale})`,
-            transition: bounced ? 'filter 0.3s ease' : 'none'
+            hue: hue
           };
+
+          // Only update rotation if user hasn't manually set it
+          if (asset.userRotation === undefined) {
+            updates.rotation = rotation;
+          }
+
+          // NEVER override width/height/scale if user has manually set them
+          if (asset.userScale === undefined && asset.userWidth === undefined && asset.userHeight === undefined) {
+            updates.scale = scale;
+          }
+
+          return updates;
         })
       );
     };

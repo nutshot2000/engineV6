@@ -76,6 +76,12 @@ async function getExampleAssets() {
       type: 'background'
     },
     {
+      name: 'background.png',
+      src: '/assets/backgrounds/background.png',
+      folder: 'backgrounds',
+      type: 'background'
+    },
+    {
       name: 'start_button.svg',
       src: '/assets/ui/start_button.svg', 
       folder: 'ui',
