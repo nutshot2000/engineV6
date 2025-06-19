@@ -1,0 +1,10 @@
+<svg width="120" height="40" xmlns="http://www.w3.org/2000/svg">
+  <!-- Button background -->
+  <rect width="120" height="40" fill="#4CAF50" rx="8" stroke="#388E3C" stroke-width="2"/>
+  
+  <!-- Button highlight -->
+  <rect x="2" y="2" width="116" height="18" fill="#66BB6A" rx="6" opacity="0.5"/>
+  
+  <!-- Button text -->
+  <text x="60" y="26" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="14" font-weight="bold">START</text>
+</svg> 
