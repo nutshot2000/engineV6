@@ -1,6 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 
-const ParticleSystem = ({ particles, enabled = true }) => {
+const ParticleSystem = ({ 
+  particles, 
+  enabled = true, 
+  viewportScale = 1, 
+  viewportWidth = 1920, 
+  viewportHeight = 1080 
+}) => {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
 
@@ -12,9 +18,9 @@ const ParticleSystem = ({ particles, enabled = true }) => {
 
     const ctx = canvas.getContext('2d');
     
-    // Set canvas size to match the game canvas
-    canvas.width = 1920 * 0.667; // Scaled to match GridCanvas
-    canvas.height = 1080 * 0.667;
+    // Set canvas size to match the scaled viewport
+    canvas.width = viewportWidth * viewportScale;
+    canvas.height = viewportHeight * viewportScale;
 
     const renderParticles = () => {
       // Clear canvas with slight fade effect for trails
@@ -25,9 +31,9 @@ const ParticleSystem = ({ particles, enabled = true }) => {
       particles.forEach(particle => {
         if (particle.life <= 0) return;
 
-        const x = particle.x * 0.667; // Scale to match canvas
-        const y = particle.y * 0.667;
-        const size = particle.size * 0.667;
+        const x = particle.x * viewportScale;
+        const y = particle.y * viewportScale;
+        const size = particle.size * viewportScale;
 
         // Create gradient for glow effect
         const gradient = ctx.createRadialGradient(x, y, 0, x, y, size);
@@ -63,7 +69,7 @@ const ParticleSystem = ({ particles, enabled = true }) => {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [particles, enabled]);
+  }, [particles, enabled, viewportScale, viewportWidth, viewportHeight]);
 
   if (!enabled) return null;
 

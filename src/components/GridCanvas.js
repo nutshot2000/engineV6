@@ -5,7 +5,14 @@ import AudioAsset from "./AudioAsset";
 import AIGameAssistant from "./AIGameAssistant";
 import ParticleSystem from "./ParticleSystem";
 import Konva from "konva";
-import { GRID_SIZE, snapToGrid, getGridCoordinates } from '../utils/gridUtils';
+import { 
+  GRID_SIZE, 
+  VIEWPORT_WIDTH, 
+  VIEWPORT_HEIGHT, 
+  getGridCoordinates, 
+  calculateViewportDimensions, 
+  getViewportPosition 
+} from '../utils/gridUtils';
 import GridLines from './GridLines';
 import DrawableShape from './DrawableShape';
 import ContextMenu from './ContextMenu';
@@ -16,6 +23,7 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
   const transformerRef = useRef(null);
   const aiAssistantRef = useRef(null);
   const groupManagerRef = useRef(null);
+  const containerRef = useRef(null);
   
   const [contextMenu, setContextMenu] = useState(null);
   const [aiAssistant, setAIAssistant] = useState({
@@ -37,9 +45,43 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
 
   const [isDrawing, setIsDrawing] = useState(false);
   const [newShape, setNewShape] = useState(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [mousePos, setMousePos] = useState({ 
+    x: 0, 
+    y: 0, 
+    gridX: 0, 
+    gridY: 0, 
+    snapX: 0, 
+    snapY: 0 
+  });
+  const [viewportDimensions, setViewportDimensions] = useState({ width: 0, height: 0, scale: 1 });
+  const [viewportPosition, setViewportPosition] = useState({ x: 0, y: 0 });
 
   const [savedGroups, setSavedGroups] = useState([]);
+
+  // Handle viewport scaling and positioning for perfect 16:9 aspect ratio
+  useEffect(() => {
+    const updateViewport = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const containerWidth = rect.width;
+        const containerHeight = rect.height;
+        
+        // Calculate viewport dimensions to maximize horizontal space while maintaining 16:9
+        const dimensions = calculateViewportDimensions(containerWidth, containerHeight);
+        const position = getViewportPosition(containerWidth, containerHeight, dimensions.width, dimensions.height);
+        
+        setViewportDimensions(dimensions);
+        setViewportPosition(position);
+      }
+    };
+
+    // Initial calculation
+    updateViewport();
+
+    // Update on window resize
+    window.addEventListener('resize', updateViewport);
+    return () => window.removeEventListener('resize', updateViewport);
+  }, []);
 
   // Register sidebar callback for adding assets to notes
   useEffect(() => {
@@ -597,20 +639,31 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
       return;
     }
     
+    const stage = e.target.getStage();
+    const pos = stage.getPointerPosition();
+    
+    // Convert screen coordinates to viewport coordinates
+    const viewportX = (pos.x - viewportPosition.x) / viewportDimensions.scale;
+    const viewportY = (pos.y - viewportPosition.y) / viewportDimensions.scale;
+    
+    // Clamp coordinates to viewport bounds (0-indexed, so max is WIDTH-1, HEIGHT-1)
+    // Use more precise coordinate calculation to reach full 1919x1079 range
+    const clampedX = Math.max(0, Math.min(VIEWPORT_WIDTH - 1, Math.floor(viewportX + 0.5)));
+    const clampedY = Math.max(0, Math.min(VIEWPORT_HEIGHT - 1, Math.floor(viewportY + 0.5)));
+
     // Group selection logic
     if (drawingMode === 'group-select') {
       // Allow group selection on stage or background images (non-draggable elements)
       if (e.target !== stageRef.current && e.target.hasName('draggable')) {
         return;
       }
-      const pos = e.target.getStage().getPointerPosition();
       
       setSelectionBox({
         visible: true,
-        x: pos.x,
-        y: pos.y,
-        startX: pos.x,
-        startY: pos.y,
+        x: clampedX,
+        y: clampedY,
+        startX: clampedX,
+        startY: clampedY,
         width: 0,
         height: 0,
       });
@@ -619,65 +672,68 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
 
     // Shape drawing logic
     if (drawingMode !== 'select' && !isDrawing) {
-    const stage = e.target.getStage();
-    const pos = stage.getPointerPosition();
-    
-    setIsDrawing(true);
-      setDrawStart({ x: pos.x, y: pos.y });
+      setIsDrawing(true);
+      setDrawStart({ x: clampedX, y: clampedY });
       setSelectedIds([]);
     
-    let initialPreview;
-    if (drawingMode === 'circle') {
-      initialPreview = {
-        id: 'preview',
-        type: drawingMode,
-        shapeType: currentShapeType || 'boundary',
-          x: pos.x,
-          y: pos.y,
-        width: 10,
-        height: 10,
-        radius: 5,
-        isPreview: true
-      };
-    } else {
-      initialPreview = {
-        id: 'preview',
-        type: drawingMode,
-        shapeType: currentShapeType || 'boundary',
-          x: pos.x,
-          y: pos.y,
-        width: 10,
-        height: 10,
-        isPreview: true
-      };
-    }
+      let initialPreview;
+      if (drawingMode === 'circle') {
+        initialPreview = {
+          id: 'preview',
+          type: drawingMode,
+          shapeType: currentShapeType || 'boundary',
+          x: clampedX,
+          y: clampedY,
+          width: 10,
+          height: 10,
+          radius: 5,
+          isPreview: true
+        };
+      } else {
+        initialPreview = {
+          id: 'preview',
+          type: drawingMode,
+          shapeType: currentShapeType || 'boundary',
+          x: clampedX,
+          y: clampedY,
+          width: 10,
+          height: 10,
+          isPreview: true
+        };
+      }
       setNewShape(initialPreview);
     }
   };
 
   // Handle mouse move for drawing
   const handleMouseMove = (e) => {
-    // Group selection logic
-    if (drawingMode === 'group-select' && selectionBox.visible) {
     const stage = e.target.getStage();
     const pos = stage.getPointerPosition();
-      
+    
+    // Convert screen coordinates to viewport coordinates
+    const viewportX = (pos.x - viewportPosition.x) / viewportDimensions.scale;
+    const viewportY = (pos.y - viewportPosition.y) / viewportDimensions.scale;
+    
+    // Clamp coordinates to viewport bounds (0-indexed, so max is WIDTH-1, HEIGHT-1)
+    // Use more precise coordinate calculation to reach full 1919x1079 range
+    const clampedX = Math.max(0, Math.min(VIEWPORT_WIDTH - 1, Math.floor(viewportX + 0.5)));
+    const clampedY = Math.max(0, Math.min(VIEWPORT_HEIGHT - 1, Math.floor(viewportY + 0.5)));
+    
+    // Group selection logic
+    if (drawingMode === 'group-select' && selectionBox.visible) {
       setSelectionBox(prev => ({
         ...prev,
-        width: pos.x - prev.startX,
-        height: pos.y - prev.startY,
+        width: clampedX - prev.startX,
+        height: clampedY - prev.startY,
       }));
       return;
     }
     
-    const stage = e.target.getStage();
-    const pos = stage.getPointerPosition();
-    
     // Update mouse position with both raw and grid-aligned coordinates
-    const gridData = getGridCoordinates(pos.x, pos.y);
+    const gridData = getGridCoordinates(clampedX, clampedY);
     setMousePos({ 
-      x: Math.round(pos.x), 
-      y: Math.round(pos.y),
+      x: clampedX, 
+      y: clampedY,
       gridX: gridData.gridX,
       gridY: gridData.gridY,
       snapX: gridData.snapX,
@@ -686,8 +742,8 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
     
     // Shape drawing logic
     if (isDrawing && drawingMode !== 'select') {
-      const currentX = pos.x;
-      const currentY = pos.y;
+      const currentX = clampedX;
+      const currentY = clampedY;
     const width = Math.abs(currentX - drawStart.x);
     const height = Math.abs(currentY - drawStart.y);
     
@@ -759,9 +815,19 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
     
     // Shape drawing logic
     if (isDrawing && drawingMode !== 'select') {
-    const stage = e.target.getStage();
-    const pos = stage.getPointerPosition();
-      const endPos = { x: pos.x, y: pos.y };
+      const stage = e.target.getStage();
+      const pos = stage.getPointerPosition();
+      
+      // Convert screen coordinates to viewport coordinates
+      const viewportX = (pos.x - viewportPosition.x) / viewportDimensions.scale;
+      const viewportY = (pos.y - viewportPosition.y) / viewportDimensions.scale;
+      
+      // Clamp coordinates to viewport bounds (0-indexed, so max is WIDTH-1, HEIGHT-1)
+      // Use more precise coordinate calculation to reach full 1919x1079 range
+      const clampedX = Math.max(0, Math.min(VIEWPORT_WIDTH - 1, Math.floor(viewportX + 0.5)));
+      const clampedY = Math.max(0, Math.min(VIEWPORT_HEIGHT - 1, Math.floor(viewportY + 0.5)));
+      
+      const endPos = { x: clampedX, y: clampedY };
     const width = Math.abs(endPos.x - drawStart.x);
     const height = Math.abs(endPos.y - drawStart.y);
 
@@ -920,6 +986,7 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
 
   return (
     <div
+      ref={containerRef}
       className="grid-canvas"
       style={{ 
         position: 'relative', 
@@ -931,7 +998,10 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
         KhtmlUserDrag: 'none',
         MozUserDrag: 'none',
         OUserDrag: 'none',
-        userDrag: 'none'
+        userDrag: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
       }}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
@@ -945,22 +1015,42 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
           return acc;
         }, [])}
         enabled={true}
+        viewportScale={viewportDimensions.scale}
+        viewportWidth={VIEWPORT_WIDTH}
+        viewportHeight={VIEWPORT_HEIGHT}
       />
       
-      <Stage 
-        width={window.innerWidth} 
-        height={window.innerHeight} 
-        ref={stageRef}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onContextMenu={handleCanvasRightClick}
-        onClick={handleCanvasClick}
+      {/* Viewport Container - 16:9 Aspect Ratio with Maximum Horizontal Space */}
+      <div
+        style={{
+          position: 'absolute',
+          left: viewportPosition.x,
+          top: viewportPosition.y,
+          width: viewportDimensions.width,
+          height: viewportDimensions.height,
+          border: '2px solid #4ecdc4',
+          borderRadius: '8px',
+          overflow: 'hidden',
+          boxShadow: '0 0 20px rgba(78, 205, 196, 0.3)',
+          background: '#2a2a2a'
+        }}
       >
-        <Layer>
-          <GridLines width={window.innerWidth} height={window.innerHeight} />
+        <Stage 
+          width={viewportDimensions.width}
+          height={viewportDimensions.height}
+          scaleX={viewportDimensions.scale}
+          scaleY={viewportDimensions.scale}
+          ref={stageRef}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onContextMenu={handleCanvasRightClick}
+          onClick={handleCanvasClick}
+        >
+          <Layer>
+            <GridLines width={VIEWPORT_WIDTH} height={VIEWPORT_HEIGHT} />
           
           {/* Render shapes */}
           {shapes.map((shape) => {
@@ -1045,6 +1135,7 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
           )}
         </Layer>
       </Stage>
+      </div>
       
       {/* Context Menu */}
       {contextMenu && (
@@ -1083,36 +1174,100 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
         </div>
       )}
 
-      {/* Live Coordinate Display - Bottom Left */}
+      {/* Combined Info Display - Fixed position at bottom center */}
       <div style={{
-        position: 'absolute',
-        bottom: 8,
-        left: 8,
-        background: 'rgba(0, 0, 0, 0.8)',
+        position: 'fixed',
+        bottom: 20,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        background: 'rgba(0, 0, 0, 0.9)',
         color: '#fff',
-        padding: '8px 12px',
-        borderRadius: 6,
+        padding: '10px 20px',
+        borderRadius: 8,
         fontSize: 12,
         fontFamily: 'monospace',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        backdropFilter: 'blur(4px)',
-        WebkitBackdropFilter: 'blur(4px)',
+        border: '1px solid rgba(78, 205, 196, 0.3)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
         userSelect: 'none',
         pointerEvents: 'none',
-        zIndex: 1000
+        zIndex: 1000,
+        display: 'flex',
+        gap: 24,
+        alignItems: 'center',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)'
       }}>
-        <div style={{ marginBottom: 4, fontSize: 11, opacity: 0.7, fontWeight: 'bold' }}>
-          📍 LIVE COORDINATES
-        </div>
+        {/* Live Coordinates Section */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <div style={{ color: '#4ecdc4' }}>
+          <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 'bold', marginBottom: 2 }}>
+            📍 LIVE COORDINATES
+          </div>
+          <div style={{ color: '#4ecdc4', fontSize: 11 }}>
             Pixel: {Math.round(mousePos.x)}, {Math.round(mousePos.y)}
           </div>
-          <div style={{ color: '#ffd93d' }}>
-            Grid: ({Math.round(mousePos.x / GRID_SIZE)}, {Math.round(mousePos.y / GRID_SIZE)})
+          <div style={{ color: '#ffd93d', fontSize: 11 }}>
+            Grid: ({mousePos.gridX}, {mousePos.gridY})
           </div>
           <div style={{ color: '#ff6b6b', fontSize: 10 }}>
-            Snap: {snapToGrid(mousePos.x)}, {snapToGrid(mousePos.y)}
+            Snap: {mousePos.snapX}, {mousePos.snapY}
+          </div>
+        </div>
+
+        {/* Selected Object Info Section */}
+        {selectedIds.length > 0 && (() => {
+          const selectedId = selectedIds[0];
+          const selectedAsset = canvasAssets.find(a => a.id === selectedId);
+          const selectedShape = shapes.find(s => s.id === selectedId);
+          const selectedObject = selectedAsset || selectedShape;
+          
+          if (selectedObject) {
+            return (
+              <>
+                {/* Divider */}
+                <div style={{ width: 1, height: 60, background: 'rgba(255, 255, 255, 0.2)' }}></div>
+                
+                {/* Selected Object Section */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 'bold', marginBottom: 2 }}>
+                    🎯 SELECTED OBJECT
+                  </div>
+                  <div style={{ color: '#4ecdc4', fontSize: 11 }}>
+                    Pos: {Math.round(selectedObject.x || 0)}, {Math.round(selectedObject.y || 0)}
+                  </div>
+                  <div style={{ color: '#ffd93d', fontSize: 11 }}>
+                    Size: {Math.round(selectedObject.width || 0)}×{Math.round(selectedObject.height || 0)}
+                  </div>
+                  {selectedObject.rotation && selectedObject.rotation !== 0 && (
+                    <div style={{ color: '#ff6b6b', fontSize: 10 }}>
+                      Rotation: {Math.round(selectedObject.rotation)}°
+                    </div>
+                  )}
+                  <div style={{ color: '#a0a0a0', fontSize: 9 }}>
+                    {selectedAsset ? (selectedAsset.isAudio ? 'Audio' : 'Asset') : (selectedShape?.shapeType || 'Shape')}
+                  </div>
+                </div>
+              </>
+            );
+          }
+          return null;
+        })()}
+
+        {/* Divider */}
+        <div style={{ width: 1, height: 60, background: 'rgba(255, 255, 255, 0.2)' }}></div>
+
+        {/* Viewport Info Section */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 'bold', marginBottom: 2 }}>
+            🎮 VIEWPORT INFO
+          </div>
+          <div style={{ color: '#4ecdc4', fontSize: 11 }}>
+            Resolution: {VIEWPORT_WIDTH}x{VIEWPORT_HEIGHT}
+          </div>
+          <div style={{ color: '#ffd93d', fontSize: 11 }}>
+            Scale: {(viewportDimensions.scale * 100).toFixed(1)}%
+          </div>
+          <div style={{ color: '#ff6b6b', fontSize: 10 }}>
+            Grid: {GRID_SIZE}px ({Math.floor(VIEWPORT_WIDTH/GRID_SIZE)}×{Math.ceil(VIEWPORT_HEIGHT/GRID_SIZE)})
           </div>
         </div>
       </div>

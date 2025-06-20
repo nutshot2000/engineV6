@@ -11,7 +11,27 @@ const AIGameAssistant = forwardRef(({
   selectedObjectId,
   onSelectObject 
 }, ref) => {
-  const [notepadContent, setNotepadContent] = useState('');
+  // Initial viewport-aware prompt for AI assistance
+  const getInitialPrompt = () => {
+    return `🎮 GAME ENGINE v6 - VIEWPORT SYSTEM
+
+📐 VIEWPORT SPECS:
+• Size: 1920x1080 pixels (16:9 aspect ratio)
+• Grid: 32px cells (60×34 grid)
+• Coordinates: (0,0) top-left → (1920,1080) bottom-right
+• Center: (960, 540)
+
+🎯 QUICK REFERENCE:
+• Player start positions: (960,540) center, (200,900) platformer, (300,700) side-scroll
+• Platform heights: y=600, y=800, y=1000
+• UI zones: Top 100px, Game 100-980px, Bottom 100px
+• Collision box sizes: Player 32×48, Enemy 40×40, Trigger 48×48
+
+📝 NOTES:
+`;
+  };
+
+  const [notepadContent, setNotepadContent] = useState(getInitialPrompt());
   const [showCopiedMessage, setShowCopiedMessage] = useState(false);
   const [position, setPosition] = useState({ x: 100, y: 100 });
   const [isDragging, setIsDragging] = useState(false);
@@ -192,6 +212,19 @@ ${(group.objects || []).map((obj, index) => {
     }
   };
 
+  // Reset to initial viewport prompt
+  const resetToViewportPrompt = () => {
+    setNotepadContent(getInitialPrompt());
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      // Set cursor to end
+      setTimeout(() => {
+        const content = getInitialPrompt();
+        textareaRef.current.setSelectionRange(content.length, content.length);
+      }, 0);
+    }
+  };
+
   // Simple working drag implementation with proper cleanup
   const handleMouseDown = (e) => {
     if (e.target.closest('button')) return; // Don't drag on buttons
@@ -289,7 +322,22 @@ ${(group.objects || []).map((obj, index) => {
           }}
         >
           <h3 style={{ margin: 0, color: '#fff', fontSize: '13px' }}>📝 Game Notes</h3>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <button 
+              onClick={resetToViewportPrompt}
+              style={{ 
+                background: '#9c27b0',
+                color: 'white',
+                border: 'none',
+                borderRadius: '3px',
+                padding: '3px 6px',
+                fontSize: '9px',
+                cursor: 'pointer'
+              }}
+              title="Reset to viewport system guide"
+            >
+              🎮 Reset
+            </button>
             <button 
               onClick={copyToClipboard}
               style={{ 
@@ -297,8 +345,8 @@ ${(group.objects || []).map((obj, index) => {
                 color: 'white',
                 border: 'none',
                 borderRadius: '3px',
-                padding: '3px 8px',
-                fontSize: '10px',
+                padding: '3px 6px',
+                fontSize: '9px',
                 cursor: 'pointer'
               }}
             >
@@ -311,8 +359,8 @@ ${(group.objects || []).map((obj, index) => {
                 color: 'white',
                 border: 'none',
                 borderRadius: '3px',
-                padding: '3px 8px',
-                fontSize: '10px',
+                padding: '3px 6px',
+                fontSize: '9px',
                 cursor: 'pointer'
               }}
             >
@@ -325,8 +373,8 @@ ${(group.objects || []).map((obj, index) => {
                 color: 'white',
                 border: 'none',
                 borderRadius: '3px',
-                padding: '3px 8px',
-                fontSize: '10px',
+                padding: '3px 6px',
+                fontSize: '9px',
                 cursor: 'pointer'
               }}
             >
@@ -341,11 +389,14 @@ ${(group.objects || []).map((obj, index) => {
             ref={textareaRef}
             value={notepadContent}
             onChange={(e) => setNotepadContent(e.target.value)}
-            placeholder="Click objects to add them here, or type your own notes...
+            placeholder="🎮 VIEWPORT SYSTEM READY!
 
-Right-click objects → 'AI Game Assistant' to add detailed info
-Click coordinates (bottom-right) to insert positions
-Use this as your notepad for Cursor AI"
+✨ Quick Actions:
+• Right-click objects → 'AI Game Assistant' for detailed info
+• Click coordinates (bottom center) to insert positions
+• Copy content to share with Cursor AI
+
+📋 This notepad includes viewport specs and coordinate reference for AI assistance with your 1920x1080 game development!"
             style={{
               flex: 1,
               padding: '12px',
