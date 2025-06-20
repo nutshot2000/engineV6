@@ -178,7 +178,7 @@ function SaveMenu({ assets, canvasAssets, shapes, onLoad }) {
           <div style={{ marginBottom: '16px' }}>
             <h4 style={{ margin: '0 0 8px 0', fontSize: '12px' }}>Saved Projects:</h4>
             <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
-              {savedProjects.map((name) => (
+              {(savedProjects || []).map((name) => (
                 <div key={name} style={{ display: 'flex', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #404040' }}>
                   <span style={{ flex: 1, fontSize: '11px' }}>{name}</span>
                   <button onClick={() => handleLoad(name)} style={{ padding: '4px 8px', background: '#4ade80', color: 'white', border: 'none', borderRadius: '3px', fontSize: '10px', marginRight: '4px' }}>
@@ -189,6 +189,11 @@ function SaveMenu({ assets, canvasAssets, shapes, onLoad }) {
                   </button>
                 </div>
               ))}
+              {(!savedProjects || savedProjects.length === 0) && (
+                <div style={{ fontSize: '11px', color: '#666', padding: '8px 0' }}>
+                  No saved projects
+                </div>
+              )}
             </div>
           </div>
           

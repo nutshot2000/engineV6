@@ -9,6 +9,10 @@ body {
   background: #1a1a1a;
   color: #ffffff;
   overflow: hidden;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
 code {
@@ -22,6 +26,11 @@ code {
   height: 100vh;
   width: 100vw;
   background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
 }
 
 .top-bar {
@@ -38,7 +47,41 @@ code {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 0 20px;
+}
+
+.top-bar-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.top-bar-button {
+  background: #4a4a4d;
+  color: white;
+  border: 1px solid #5a5a5d;
+  padding: 6px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.2s;
+}
+
+.top-bar-button:hover {
+  background: #5a5a5d;
+}
+
+.clear-scene-button {
+  background: #6b211e; /* Dark red */
+  border-color: #8f2d29;
+}
+
+.clear-scene-button:hover {
+  background: #8f2d29;
 }
 
 .app-title {
@@ -53,24 +96,38 @@ code {
 
 .main-layout {
   display: flex;
-  flex: 1;
+  flex-grow: 1;
   overflow: hidden;
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
 }
 
 /* Sidebar Styles */
 .sidebar {
   width: 280px;
+  height: 100%;
   background: linear-gradient(180deg, #2a2a2a 0%, #1f1f1f 100%);
   border-right: 1px solid #444;
   display: flex;
   flex-direction: column;
   box-shadow: 2px 0 10px rgba(0,0,0,0.2);
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+  pointer-events: auto;
+  overflow: hidden;
 }
 
 .sidebar-header {
   padding: 20px;
   border-bottom: 1px solid #333;
   background: linear-gradient(135deg, #333 0%, #2a2a2a 100%);
+  flex-shrink: 0;
 }
 
 .sidebar-title {
@@ -94,6 +151,7 @@ code {
   padding: 16px;
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .asset-item {
@@ -214,67 +272,9 @@ code {
 }
 
 /* Canvas Assets */
-.canvas-asset {
-  position: absolute;
-  cursor: move;
-  border: 2px solid transparent;
-  transition: border-color 0.2s ease;
-}
+/* Canvas assets are now handled by Konva - no CSS needed */
 
-.canvas-asset:hover {
-  border-color: #4ecdc4;
-}
-
-.canvas-asset.selected {
-  border-color: #45b7d1;
-  box-shadow: 0 0 10px rgba(69, 183, 209, 0.5);
-}
-
-.canvas-asset img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-/* Transform Controls */
-.transform-controls {
-  position: absolute;
-  pointer-events: none;
-}
-
-.resize-handle {
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  background: #45b7d1;
-  border: 1px solid #fff;
-  border-radius: 50%;
-  pointer-events: all;
-  cursor: nw-resize;
-}
-
-.resize-handle.bottom-right {
-  bottom: -4px;
-  right: -4px;
-}
-
-.rotation-handle {
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  background: #4ecdc4;
-  border: 1px solid #fff;
-  border-radius: 50%;
-  pointer-events: all;
-  cursor: grab;
-  top: -20px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.rotation-handle:active {
-  cursor: grabbing;
-}
+/* Old transform controls removed - now using Konva Transformer */
 
 /* Tools Panel */
 .tools-panel {
@@ -284,6 +284,11 @@ code {
   display: flex;
   flex-direction: column;
   box-shadow: -2px 0 10px rgba(0,0,0,0.2);
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
 }
 
 .tools-header {

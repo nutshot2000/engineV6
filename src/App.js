@@ -4,7 +4,6 @@ import GridCanvas from "./components/GridCanvas";
 import SaveMenu from "./components/SaveMenu";
 
 import IndexedDBManager from "./utils/IndexedDBManager";
-import { getAvailableAssets } from "./utils/AssetScanner";
 import "./index.css";
 
 function App() {
@@ -13,34 +12,37 @@ function App() {
   const [shapes, setShapes] = useState([]);
   const [drawingMode, setDrawingMode] = useState('select'); // 'select', 'rectangle', 'circle', 'line'
   const [currentShapeType, setCurrentShapeType] = useState('boundary'); // 'boundary', 'hitbox', 'trigger'
+  const [sidebarNotesCallback, setSidebarNotesCallback] = useState(null);
 
 
-  // Load available assets on startup
-  useEffect(() => {
-    const loadAssets = async () => {
-      try {
-        const availableAssets = await getAvailableAssets();
-        setAssets(availableAssets);
-        console.log('Loaded assets:', availableAssets);
-      } catch (error) {
-        console.error('Error loading assets:', error);
-        // Fallback to default assets if scanning fails
-        setAssets([]);
-      }
-    };
-    
-    loadAssets();
-  }, []);
+  // Assets are now loaded via folder picker in Sidebar component
 
   const handleProjectLoad = (project) => {
     setAssets(project.assets || []);
-    setCanvasAssets(project.canvasAssets || []);
+    const upgradedCanvasAssets = (project.canvasAssets || []).map(asset => ({
+      ...asset,
+      isAsset: true
+    }));
+    setCanvasAssets(upgradedCanvasAssets);
     setShapes(project.shapes || []);
+  };
+
+  const handleClearScene = () => {
+    if (window.confirm('Are you sure you want to clear the entire scene? This action cannot be undone.')) {
+      setCanvasAssets([]);
+      setShapes([]);
+    }
   };
 
   // Auto-save functionality
   useEffect(() => {
+    let autoSaveTimeout;
+    let isAutoSaving = false;
+
     const autoSave = async () => {
+      // Prevent multiple auto-saves from running simultaneously
+      if (isAutoSaving) return;
+      
       const projectData = {
         assets: assets,
         canvasAssets: canvasAssets,
@@ -48,19 +50,27 @@ function App() {
         settings: { gridSize: 40 }
       };
       
-      // Only auto-save if there's actually content
-      if (canvasAssets.length > 0 || shapes.length > 0) {
-        const success = await IndexedDBManager.saveProject(projectData, 'autosave');
-        if (success) {
-          console.log('Auto-saved project to IndexedDB');
-        } else {
-          console.log('Auto-save failed');
+      // Only auto-save if there's actually content (including custom assets)
+      if (canvasAssets.length > 0 || shapes.length > 0 || assets.length > 0) {
+        isAutoSaving = true;
+        try {
+          await IndexedDBManager.saveProject(projectData, 'autosave');
+        } catch (error) {
+          console.error('Auto-save failed:', error);
+        } finally {
+          isAutoSaving = false;
         }
       }
     };
 
-    // Auto-save every 30 seconds
-    const interval = setInterval(autoSave, 30000);
+    // Debounced auto-save - only save after 30 seconds of inactivity
+    const debouncedAutoSave = () => {
+      clearTimeout(autoSaveTimeout);
+      autoSaveTimeout = setTimeout(autoSave, 30000);
+    };
+
+    // Trigger debounced auto-save when data changes
+    debouncedAutoSave();
     
     // Also save when the page is about to unload
     const handleBeforeUnload = () => {
@@ -70,7 +80,7 @@ function App() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     
     return () => {
-      clearInterval(interval);
+      clearTimeout(autoSaveTimeout);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [assets, canvasAssets, shapes]);
@@ -79,9 +89,9 @@ function App() {
   useEffect(() => {
     const loadAutosave = async () => {
       const autosaveProject = await IndexedDBManager.loadProject('autosave');
-      if (autosaveProject && (autosaveProject.canvasAssets?.length > 0 || autosaveProject.shapes?.length > 0)) {
+      if (autosaveProject) {
+        // Always load assets, even if there are no canvas items
         handleProjectLoad(autosaveProject);
-        console.log('Loaded autosave project from IndexedDB');
       }
     };
     
@@ -97,16 +107,28 @@ function App() {
       <div className="top-bar">
         <div className="top-bar-content">
           <h1 className="app-title">Game Engine v5</h1>
-          <SaveMenu 
-            assets={assets} 
-            canvasAssets={canvasAssets}
-            shapes={shapes}
-            onLoad={handleProjectLoad} 
-          />
+          <div className="top-bar-buttons">
+            <button
+              onClick={handleClearScene}
+              className="top-bar-button clear-scene-button"
+            >
+              🗑️ Clear Scene
+            </button>
+            <SaveMenu 
+              assets={assets} 
+              canvasAssets={canvasAssets}
+              shapes={shapes}
+              onLoad={handleProjectLoad} 
+            />
+          </div>
         </div>
       </div>
       <div className="main-layout">
-        <Sidebar assets={assets} setAssets={setAssets} />
+        <Sidebar 
+          assets={assets} 
+          setAssets={setAssets} 
+          onAddToNotes={sidebarNotesCallback}
+        />
         <div className="main-content">
           <div className="canvas-viewport">
             <GridCanvas 
@@ -118,6 +140,7 @@ function App() {
               setDrawingMode={setDrawingMode}
               currentShapeType={currentShapeType}
               setCurrentShapeType={setCurrentShapeType}
+              onRegisterSidebarCallback={setSidebarNotesCallback}
             />
           </div>
         </div>
@@ -148,14 +171,9 @@ function App() {
           </div>
           
           <div className="tool-section">
-            <h4>Asset Folders</h4>
+            <h4>Asset Management</h4>
             <p style={{ color: '#666', fontSize: '11px', margin: '8px 0' }}>
-              AI Agent can add assets to:<br/>
-              📁 public/assets/images/<br/>
-              📁 public/assets/sprites/<br/>
-              📁 public/assets/backgrounds/<br/>
-              📁 public/assets/ui/<br/>
-              📁 public/assets/temp/
+              Use "Browse Asset Folder" to load images from any directory on your computer. Assets will appear in the sidebar for drag-and-drop.
             </p>
           </div>
         </div>

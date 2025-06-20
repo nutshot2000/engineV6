@@ -1,10 +1,26 @@
-import React, { useRef, useState } from "react";
-import { Stage, Layer, Rect, Circle, Text, Group } from "react-konva";
+import React, { useRef, useState, useEffect } from "react";
+import { Stage, Layer, Rect, Circle, Text, Group, Transformer } from "react-konva";
 import AssetImage from "./AssetImage";
+import AudioAsset from "./AudioAsset";
 import AIGameAssistant from "./AIGameAssistant";
 import ParticleSystem from "./ParticleSystem";
+import Konva from "konva";
 
-const GRID_SIZE = 40;
+const GRID_SIZE = 60;
+
+// Grid utility functions
+function snapToGrid(value) {
+  return Math.round(value / GRID_SIZE) * GRID_SIZE;
+}
+
+function getGridCoordinates(x, y) {
+  return {
+    gridX: Math.round(x / GRID_SIZE),
+    gridY: Math.round(y / GRID_SIZE),
+    snapX: snapToGrid(x),
+    snapY: snapToGrid(y)
+  };
+}
 
 function drawGrid(width, height) {
   const lines = [];
@@ -40,10 +56,125 @@ function drawGrid(width, height) {
 
 // Context Menu Component
 function ContextMenu({ x, y, target, onClose, onAction, mousePos, currentShapeType }) {
-  // Different menu items based on whether we clicked on an object or empty canvas
+  const [menuPosition, setMenuPosition] = useState({ x, y });
+  const menuRef = useRef(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      // Don't close if clicking on the menu itself
+      if (e.target.closest('[data-context-menu]')) {
+        return;
+      }
+      onClose();
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [onClose]);
+
+  // Adjust position to prevent menu from going off-screen
+  useEffect(() => {
+    if (menuRef.current) {
+      const menuRect = menuRef.current.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      
+      let adjustedX = x;
+      let adjustedY = y;
+      
+      // Check if menu goes off the right edge
+      if (x + menuRect.width > viewportWidth) {
+        adjustedX = viewportWidth - menuRect.width - 10; // 10px margin
+      }
+      
+      // Check if menu goes off the bottom edge
+      if (y + menuRect.height > viewportHeight) {
+        adjustedY = y - menuRect.height; // Show above the cursor
+        // If it still goes off-screen at the top, clamp to top
+        if (adjustedY < 10) {
+          adjustedY = 10;
+        }
+      }
+      
+      // Update position if it changed
+      if (adjustedX !== x || adjustedY !== y) {
+        setMenuPosition({ x: adjustedX, y: adjustedY });
+      }
+    }
+  }, [x, y]);
+  // Canvas actions that should always be available
+  const canvasActions = [
+    { label: '---', action: 'divider' },
+    {
+      label: '🔎 Select & Group',
+      action: 'group-select'
+    },
+    { label: '---', action: 'divider' },
+    {
+      label: `➕ Draw Rectangle (${currentShapeType || 'boundary'})`,
+      action: 'add-rectangle'
+    },
+    {
+      label: `⭕ Draw Circle (${currentShapeType || 'boundary'})`,
+      action: 'add-circle'
+    },
+    { label: '---', action: 'divider' },
+    {
+      label: '🧱 Quick Boundary',
+      action: 'add-boundary'
+    },
+    {
+      label: '🎯 Quick Hit Box',
+      action: 'add-hitbox'
+    },
+    {
+      label: '⚡ Quick Trigger',
+      action: 'add-trigger'
+    },
+    {
+      label: '💥 Quick Collision Box',
+      action: 'add-collision'
+    }
+  ];
+
   const menuItems = target ? (
-    // Check if target is a shape (has shapeType) or an asset
-    target.shapeType ? [
+    // Check if target is a shape or an asset
+    target.isAsset ? [
+      // Asset-specific menu
+      {
+        label: `✏️ Rename "${target.name || 'Asset'}"`,
+        action: 'rename-asset'
+      },
+      { label: '---', action: 'divider' },
+      {
+        label: '📝 Add to Notes',
+        action: 'open-ai-assistant'
+      },
+      {
+        label: target.locked ? '🔓 Unlock' : '🔒 Lock',
+        action: 'toggle-lock'
+      },
+      { label: '---', action: 'divider' },
+      {
+        label: '⬆️ Bring Forward',
+        action: 'bring-forward'
+      },
+      {
+        label: '⬇️ Send Backward',
+        action: 'send-backward'
+      },
+      { label: '---', action: 'divider' },
+      {
+        label: '🗑️ Delete',
+        action: 'delete',
+        danger: true
+      },
+      // Always include canvas actions
+      ...canvasActions
+    ] : [
       // Shape-specific menu
       {
         label: `✏️ Rename "${target.name || 'Shape'}"`,
@@ -91,59 +222,21 @@ function ContextMenu({ x, y, target, onClose, onAction, mousePos, currentShapeTy
       },
       { label: '---', action: 'divider' },
       {
-        label: '🗑️ Delete',
-        action: 'delete',
-        danger: true
-      }
-    ] : [
-      // Asset-specific menu (existing functionality)
-      {
-        label: target.locked ? '🔓 Unlock' : '🔒 Lock',
-        action: 'toggle-lock'
-      },
-      { label: '---', action: 'divider' },
-      {
-        label: '⬆️ Bring Forward',
-        action: 'bring-forward'
-      },
-      {
-        label: '⬇️ Send Backward',
-        action: 'send-backward'
+        label: '📝 Add to Notes',
+        action: 'open-ai-assistant'
       },
       { label: '---', action: 'divider' },
       {
         label: '🗑️ Delete',
         action: 'delete',
         danger: true
-      }
+      },
+      // Always include canvas actions
+      ...canvasActions
     ]
-  ) : [
-    // Canvas/blank area menu
-    {
-      label: `➕ Draw Rectangle (${currentShapeType || 'boundary'})`,
-      action: 'add-rectangle'
-    },
-    {
-      label: `⭕ Draw Circle (${currentShapeType || 'boundary'})`,
-      action: 'add-circle'
-    },
-    { label: '---', action: 'divider' },
-    {
-      label: '🧱 Quick Boundary',
-      action: 'add-boundary'
-    },
-    {
-      label: '🎯 Quick Hit Box',
-      action: 'add-hitbox'
-    },
-    {
-      label: '⚡ Quick Trigger',
-      action: 'add-trigger'
-    },
-    {
-      label: '💥 Quick Collision Box',
-      action: 'add-collision'
-    },
+      ) : [
+    // Canvas/blank area menu - includes all canvas actions plus additional options
+    ...canvasActions,
     { label: '---', action: 'divider' },
     {
       label: '📁 Paste Asset',
@@ -156,23 +249,30 @@ function ContextMenu({ x, y, target, onClose, onAction, mousePos, currentShapeTy
     },
     { label: '---', action: 'divider' },
     {
-      label: '🤖 AI Game Assistant',
+      label: '📝 Game Notes',
       action: 'open-ai-assistant'
     },
     { label: '---', action: 'divider' },
     {
-      label: `📍 Position: ${mousePos?.x || 0}, ${mousePos?.y || 0}`,
-      action: 'show-position',
+      label: `📍 Pixel: ${mousePos?.pixelX || mousePos?.x || 0}, ${mousePos?.pixelY || mousePos?.y || 0}`,
+      action: 'show-pixel-position',
+      disabled: true
+    },
+    {
+      label: `🔲 Grid: (${Math.round((mousePos?.x || 0) / 60)}, ${Math.round((mousePos?.y || 0) / 60)}) → ${Math.round((mousePos?.x || 0) / 60) * 60}, ${Math.round((mousePos?.y || 0) / 60) * 60}`,
+      action: 'show-grid-position',
       disabled: true
     }
   ];
 
   return (
     <div
+      ref={menuRef}
+      data-context-menu
       style={{
         position: 'fixed',
-        left: x,
-        top: y,
+        left: menuPosition.x,
+        top: menuPosition.y,
         background: '#2d2d30',
         border: '1px solid #404040',
         borderRadius: '4px',
@@ -183,6 +283,7 @@ function ContextMenu({ x, y, target, onClose, onAction, mousePos, currentShapeTy
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         fontSize: '12px'
       }}
+      onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
       {menuItems.map((item, index) => {
@@ -226,7 +327,6 @@ function ContextMenu({ x, y, target, onClose, onAction, mousePos, currentShapeTy
             }}
             onClick={() => {
               if (!item.disabled) {
-                console.log('Context menu item clicked:', item.action, target);
                 onAction(item.action, target);
                 onClose();
               }
@@ -241,7 +341,7 @@ function ContextMenu({ x, y, target, onClose, onAction, mousePos, currentShapeTy
 }
 
 // Shape component for drawn shapes
-function DrawableShape({ shape, isSelected, onSelect, onChange, onContextMenu }) {
+function DrawableShape({ shape, isSelected, onSelect, onChange, onContextMenu, name }) {
   const shapeRef = useRef();
 
   const getShapeProps = () => {
@@ -257,31 +357,19 @@ function DrawableShape({ shape, isSelected, onSelect, onChange, onContextMenu })
       },
       onDragEnd: (e) => {
         if (!shape.locked) {
+          const newX = e.target.x();
+          const newY = e.target.y();
+          
+          // Optional grid snapping for shapes (can be enabled via a setting later)
+          // For now, keep pixel-perfect positioning but make it easy to add snapping
           onChange({
             ...shape,
-            x: e.target.x(),
-            y: e.target.y(),
+            x: newX,
+            y: newY,
           });
         }
       },
-      onTransformEnd: (e) => {
-        if (!shape.locked) {
-          const node = shapeRef.current;
-          const scaleX = node.scaleX();
-          const scaleY = node.scaleY();
 
-          node.scaleX(1);
-          node.scaleY(1);
-
-          onChange({
-            ...shape,
-            x: node.x(),
-            y: node.y(),
-            width: Math.max(5, shape.width * scaleX),
-            height: Math.max(5, shape.height * scaleY),
-          });
-        }
-      },
     };
 
     // Shape-specific styling based on type
@@ -329,6 +417,8 @@ function DrawableShape({ shape, isSelected, onSelect, onChange, onContextMenu })
   if (shape.type === 'rectangle') {
     return (
       <Group
+        id={String(shape.id)}
+        name={name}
         ref={shapeRef}
         x={shape.x}
         y={shape.y}
@@ -337,35 +427,21 @@ function DrawableShape({ shape, isSelected, onSelect, onChange, onContextMenu })
         onTap={onSelect}
         onContextMenu={(e) => {
           e.evt.preventDefault();
+          e.evt.stopPropagation();
           onContextMenu(e, shape);
         }}
         onDragEnd={(e) => {
           if (!shape.locked) {
+            const newX = e.target.x();
+            const newY = e.target.y();
             onChange({
               ...shape,
-              x: e.target.x(),
-              y: e.target.y(),
+              x: newX,
+              y: newY,
             });
           }
         }}
-        onTransformEnd={(e) => {
-          if (!shape.locked) {
-            const node = shapeRef.current;
-            const scaleX = node.scaleX();
-            const scaleY = node.scaleY();
 
-            node.scaleX(1);
-            node.scaleY(1);
-
-            onChange({
-              ...shape,
-              x: node.x(),
-              y: node.y(),
-              width: Math.max(5, shape.width * scaleX),
-              height: Math.max(5, shape.height * scaleY),
-            });
-          }
-        }}
       >
         <Rect
           x={0}
@@ -377,6 +453,12 @@ function DrawableShape({ shape, isSelected, onSelect, onChange, onContextMenu })
           fill={shapeProps.fill}
           strokeDashArray={shapeProps.strokeDashArray}
           opacity={shapeProps.opacity}
+          onContextMenu={(e) => {
+            e.evt.preventDefault();
+            e.evt.stopPropagation();
+            // Let the parent Group handle the context menu
+            onContextMenu(e, shape);
+          }}
         />
         {/* Text label for the shape */}
         {shape.name && !shape.isPreview && (
@@ -397,67 +479,55 @@ function DrawableShape({ shape, isSelected, onSelect, onChange, onContextMenu })
       </Group>
     );
   } else if (shape.type === 'circle') {
-    // Calculate center position for circle
-    const centerX = shape.x + shape.radius;
-    const centerY = shape.y + shape.radius;
-    
     return (
       <Group
+        id={String(shape.id)}
+        name={name}
         ref={shapeRef}
-        x={centerX}
-        y={centerY}
+        x={shape.x}
+        y={shape.y}
         draggable={!shape.locked && !shape.isPreview}
         onClick={onSelect}
         onTap={onSelect}
         onContextMenu={(e) => {
           e.evt.preventDefault();
+          e.evt.stopPropagation();
           onContextMenu(e, shape);
         }}
         onDragEnd={(e) => {
           if (!shape.locked) {
+            const newX = e.target.x();
+            const newY = e.target.y();
             onChange({
               ...shape,
-              x: e.target.x() - shape.radius,
-              y: e.target.y() - shape.radius,
+              x: newX,
+              y: newY,
             });
           }
         }}
-        onTransformEnd={(e) => {
-          if (!shape.locked) {
-            const node = shapeRef.current;
-            const scaleX = node.scaleX();
-            const scaleY = node.scaleY();
 
-            node.scaleX(1);
-            node.scaleY(1);
-
-            const newRadius = Math.max(5, shape.radius * Math.max(scaleX, scaleY));
-            onChange({
-              ...shape,
-              x: node.x() - newRadius,
-              y: node.y() - newRadius,
-              radius: newRadius,
-              width: newRadius * 2,
-              height: newRadius * 2,
-            });
-          }
-        }}
       >
         <Circle
-          x={0}
-          y={0}
+          x={shape.radius}
+          y={shape.radius}
           radius={shape.radius}
           stroke={shapeProps.stroke}
           strokeWidth={shapeProps.strokeWidth}
           fill={shapeProps.fill}
           strokeDashArray={shapeProps.strokeDashArray}
           opacity={shapeProps.opacity}
+          onContextMenu={(e) => {
+            e.evt.preventDefault();
+            e.evt.stopPropagation();
+            // Let the parent Group handle the context menu
+            onContextMenu(e, shape);
+          }}
         />
         {/* Text label for the shape */}
         {shape.name && !shape.isPreview && (
           <Text
-            x={-(shape.name.length * 5)}
-            y={-12}
+            x={shape.radius - (shape.name.length * 5)}
+            y={shape.radius - 12}
             text={shape.name}
             fontSize={20}
             fontFamily="Arial, sans-serif"
@@ -477,32 +547,183 @@ function DrawableShape({ shape, isSelected, onSelect, onChange, onContextMenu })
   return null;
 }
 
-function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingMode, setDrawingMode, currentShapeType, setCurrentShapeType }) {
-  const stageRef = useRef();
-  const [selectedId, setSelectedId] = useState(null);
+function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingMode, setDrawingMode, currentShapeType, setCurrentShapeType, onRegisterSidebarCallback }) {
+  const stageRef = useRef(null);
+  const transformerRef = useRef(null);
+  const aiAssistantRef = useRef(null);
+  
   const [contextMenu, setContextMenu] = useState(null);
-  const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
-  const [mouseCoords, setMouseCoords] = useState({ x: 0, y: 0 });
-  const [showCopyNotification, setShowCopyNotification] = useState(false);
-  
-  // Drawing state
-  const [isDrawing, setIsDrawing] = useState(false);
+  const [aiAssistant, setAIAssistant] = useState({
+    isOpen: false,
+    target: null,
+    context: null
+  });
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [selectionBox, setSelectionBox] = useState({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    visible: false,
+    startX: 0,
+    startY: 0,
+  });
   const [drawStart, setDrawStart] = useState({ x: 0, y: 0 });
-  const [previewShape, setPreviewShape] = useState(null);
-  
-  const aiAssistantRef = useRef();
+
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [newShape, setNewShape] = useState(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [coordinates, setCoordinates] = useState({ x: 0, y: 0 });
+
+  // Group management state
+  const [savedGroups, setSavedGroups] = useState([]);
+  const [showGroupPanel, setShowGroupPanel] = useState(false);
+  const [groupDialog, setGroupDialog] = useState({
+    isOpen: false,
+    selectedObjects: [],
+    groupName: '',
+    groupDescription: ''
+  });
+
+  // Register sidebar callback for adding assets to notes
+  useEffect(() => {
+    if (onRegisterSidebarCallback) {
+      const handleSidebarAddToNotes = (asset) => {
+        // Open AI notepad if not already open
+        if (!aiAssistant.isOpen) {
+          setAIAssistant({
+            isOpen: true,
+            target: asset,
+            context: 'sidebar-asset'
+          });
+        }
+        
+        // Add asset info to notepad
+        setTimeout(() => {
+          if (aiAssistantRef.current) {
+            aiAssistantRef.current.addObjectToChat({
+              ...asset,
+              isAsset: true,
+              source: 'sidebar'
+            });
+          }
+        }, 100);
+      };
+      
+      onRegisterSidebarCallback(() => handleSidebarAddToNotes);
+    }
+  }, [aiAssistant.isOpen, onRegisterSidebarCallback]);
+
+  // Connect selected objects to transformer
+  useEffect(() => {
+    if (transformerRef.current && stageRef.current) {
+      const selectedNodes = selectedIds.map(id => {
+        let node = stageRef.current.findOne('#' + id);
+        // If we can't find by ID, try finding by name
+        if (!node) {
+          node = stageRef.current.findOne('.draggable').find(n => n.id() === id);
+        }
+        return node;
+      }).filter(Boolean);
+      
+      // Clear transformer first to prevent positioning issues
+      transformerRef.current.nodes([]);
+      
+      if (selectedNodes.length > 0) {
+        // Set nodes and force immediate update
+        transformerRef.current.nodes(selectedNodes);
+        transformerRef.current.forceUpdate();
+        
+        // Additional fix: ensure the transformer recalculates bounds
+        setTimeout(() => {
+          if (transformerRef.current && transformerRef.current.nodes().length > 0) {
+            transformerRef.current.forceUpdate();
+            transformerRef.current.getLayer()?.batchDraw();
+          }
+        }, 10);
+      }
+      
+      transformerRef.current.getLayer()?.batchDraw();
+    }
+  }, [selectedIds]);
+
+  const handleCanvasClick = (e) => {
+    // Close context menu if open
+    setContextMenu(null);
+    
+    // if we are drawing a selection, do nothing
+    if (selectionBox.visible) {
+      return;
+    }
+
+    // if click on empty area (stage) - clear selections unless holding shift/ctrl
+    if (e.target === e.target.getStage()) {
+      const metaPressed = e.evt.shiftKey || e.evt.ctrlKey;
+      if (!metaPressed) {
+        setSelectedIds([]);
+      }
+      return;
+    }
+
+    // Check if we clicked on a selectable object (either by 'draggable' name or by having a matching ID)
+    let targetId = e.target.id();
+    let selectableElement = e.target;
+    
+    // If the clicked element doesn't have an ID, check its parent (for KonvaImage inside Group)
+    if (!targetId && e.target.getParent) {
+      const parent = e.target.getParent();
+      if (parent && parent.id) {
+        targetId = parent.id();
+        selectableElement = parent;
+      }
+    }
+    
+    const hasSelectableId = targetId && (
+      canvasAssets.some(asset => asset.id === targetId) || 
+      shapes.some(shape => shape.id === targetId)
+    );
+    
+    if (!selectableElement.hasName('draggable') && !hasSelectableId) {
+      // Clicked on something that's not selectable (like background) - clear selections
+      const metaPressed = e.evt.shiftKey || e.evt.ctrlKey;
+      if (!metaPressed) {
+        setSelectedIds([]);
+      }
+      return;
+    }
+
+    // We clicked on a selectable object - handle selection
+    const objectId = targetId;
+    const metaPressed = e.evt.shiftKey || e.evt.ctrlKey;
+    const isSelected = selectedIds.includes(objectId);
+
+    if (!metaPressed && !isSelected) {
+      // if no key pressed and the node is not selected
+      // select just one
+      setSelectedIds([objectId]);
+    } else if (metaPressed && isSelected) {
+      // if we pressed keys and node was selected
+      // we need to remove it from selection
+      const ids = selectedIds.slice();
+      ids.splice(ids.indexOf(objectId), 1);
+      setSelectedIds(ids);
+    } else if (metaPressed && !isSelected) {
+      // add the node to selection
+      setSelectedIds([...selectedIds, objectId]);
+    }
+  };
 
   // Handle context menu actions
   const handleContextAction = (action, target, position) => {
+    // Close the context menu first to prevent it getting stuck
+    setContextMenu(null);
+    
     // Detect target type
     const isAsset = target && target.hasOwnProperty('src');
     const isShape = target && target.hasOwnProperty('shapeType');
     
-    console.log('Context action:', action, 'target:', target, 'isAsset:', isAsset, 'isShape:', isShape);
-    
     switch (action) {
       case 'toggle-lock':
-        console.log('Toggle lock called for:', target);
         if (isAsset) {
           setCanvasAssets(prev => 
             prev.map(asset => 
@@ -519,8 +740,6 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
                 : shape
             )
           );
-        } else {
-          console.log('Warning: Unknown target type for lock toggle:', target);
         }
         break;
         
@@ -577,10 +796,15 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
           setCanvasAssets(prev => prev.filter(asset => asset.id !== target.id));
         } else if (isShape) {
           setShapes(prev => prev.filter(shape => shape.id !== target.id));
-        } else {
-          console.log('Warning: Unknown target type for delete:', target);
         }
-        setSelectedId(null);
+        setSelectedIds([]);
+        break;
+        
+      // Group selection mode
+      case 'group-select':
+        setDrawingMode('group-select');
+        setSelectedIds([]);
+
         break;
         
       // Canvas right-click actions - Start drawing mode
@@ -589,7 +813,7 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
         setCurrentShapeType(currentShapeType || 'boundary');
         setIsDrawing(true);
         setDrawStart(position);
-        setSelectedId(null);
+        setSelectedIds([]);
         // Show initial preview
         const rectPreview = {
           id: 'preview',
@@ -601,7 +825,7 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
           height: 10,
           isPreview: true
         };
-        setPreviewShape(rectPreview);
+        setNewShape(rectPreview);
         setContextMenu(null);
         break;
       }
@@ -610,7 +834,7 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
         setCurrentShapeType(currentShapeType || 'boundary');
         setIsDrawing(true);
         setDrawStart(position);
-        setSelectedId(null);
+        setSelectedIds([]);
         // Show initial preview
         const circlePreview = {
           id: 'preview',
@@ -623,14 +847,14 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
           radius: 5,
           isPreview: true
         };
-        setPreviewShape(circlePreview);
+        setNewShape(circlePreview);
         setContextMenu(null);
         break;
       }
       
       case 'add-boundary':
         const newBoundary = {
-          id: Date.now() + Math.random(),
+          id: `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           type: 'rectangle',
           shapeType: 'boundary',
           x: position?.x || 0,
@@ -644,7 +868,7 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
         
       case 'add-hitbox':
         const newHitbox = {
-          id: Date.now() + Math.random(),
+          id: `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           type: 'rectangle',
           shapeType: 'hitbox',
           x: position?.x || 0,
@@ -658,7 +882,7 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
         
       case 'add-trigger':
         const newTrigger = {
-          id: Date.now() + Math.random(),
+          id: `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           type: 'rectangle',
           shapeType: 'trigger',
           x: position?.x || 0,
@@ -672,7 +896,7 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
         
       case 'add-collision':
         const newCollision = {
-          id: Date.now() + Math.random(),
+          id: `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           type: 'rectangle',
           shapeType: 'collision',
           x: position?.x || 0,
@@ -686,16 +910,44 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
         
       case 'add-game-object':
         // Placeholder for future game object creation
-        console.log('Add game object at:', position);
         break;
         
       case 'open-ai-assistant':
-        setAiAssistantOpen(true);
+        if (target) {
+          // Select the target object
+          setSelectedIds([target.id]);
+          
+          // Open AI Assistant and send object info
+          if (!aiAssistant.isOpen) {
+            setAIAssistant({
+              isOpen: true,
+              target: target,
+              context: target.isAsset ? 'asset' : 'shape'
+            });
+            // Wait for AI Assistant to open, then send object info
+            setTimeout(() => {
+              if (aiAssistantRef.current) {
+                aiAssistantRef.current.addObjectToChat(target);
+              }
+            }, 100);
+          } else {
+            // AI Assistant is already open, just send object info
+            if (aiAssistantRef.current) {
+              aiAssistantRef.current.addObjectToChat(target);
+            }
+          }
+        } else {
+          // No target (canvas click), just open AI Assistant
+          setAIAssistant({
+            isOpen: true,
+            target: null,
+            context: 'canvas'
+          });
+        }
         break;
         
       case 'paste-asset':
         // Placeholder for future asset pasting
-        console.log('Paste asset at:', position);
         break;
         
       // Shape-specific actions
@@ -707,6 +959,19 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
               shape.id === target.id 
                 ? { ...shape, name: newName.trim() }
                 : shape
+            )
+          );
+        }
+        break;
+        
+      case 'rename-asset':
+        const newAssetName = prompt(`Enter new name for ${target.name || 'Asset'}:`, target.name || 'Asset');
+        if (newAssetName !== null && newAssetName.trim() !== '') {
+          setCanvasAssets(prev => 
+            prev.map(asset => 
+              asset.id === target.id 
+                ? { ...asset, name: newAssetName.trim() }
+                : asset
             )
           );
         }
@@ -758,36 +1023,72 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
     }
   };
   
+  // Handle drag over - CRITICAL for allowing drops
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Set the drop effect to indicate this is a valid drop zone
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  };
+  
   // Handle drop from sidebar - Create proper assets
   const handleDrop = (e) => {
     e.preventDefault();
-    if (drawingMode !== 'select') return; // Only allow asset dropping in select mode
+    e.stopPropagation();
     
+    // Allow asset dropping in select mode
+    if (drawingMode !== 'select') {
+      return;
+    }
+    
+    if (!stageRef.current) {
+      console.error('GridCanvas: Stage ref not available for drop operation');
+      return;
+    }
+    
+    try {
     stageRef.current.setPointersPositions(e);
+    } catch (error) {
+      console.error('GridCanvas: Error setting pointer position:', error);
+      return;
+    }
+    
     const data = e.dataTransfer.getData("asset");
-    if (!data) return;
+    if (!data) {
+      return;
+    }
     
     let asset;
     try {
       asset = JSON.parse(data);
-    } catch {
+    } catch (error) {
+      console.error('GridCanvas: Invalid asset data in drop operation:', error);
       return;
     }
     
     const pos = stageRef.current.getPointerPosition();
-    const actualX = pos.x / 0.667;
-    const actualY = pos.y / 0.667;
+    if (!pos) {
+      
+      return;
+    }
+    
+          const gridData = getGridCoordinates(pos.x, pos.y);
     
     const newAsset = {
         ...asset,
-      x: actualX,
-      y: actualY,
+      x: gridData.snapX, // Use grid-aligned position
+      y: gridData.snapY, // Use grid-aligned position
       width: 200, // Larger default size for backgrounds
       height: 200,
         rotation: 0,
-      id: Date.now() + Math.random(),
-      locked: false
+      id: `asset_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      locked: false,
+      isAsset: true
     };
+    
     
     setCanvasAssets((prev) => [...prev, newAsset]);
   };
@@ -796,52 +1097,87 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
   const handleCanvasRightClick = (e) => {
     e.evt.preventDefault();
     
-    // Only show canvas menu if clicking on empty stage (not on objects)
-    if (e.target !== e.target.getStage()) return;
-    
+    // If we're clicking on anything other than the Stage itself, don't show canvas menu
+    // This prevents the canvas menu from appearing when right-clicking on objects
     const stage = e.target.getStage();
-    const pos = stage.getPointerPosition();
+    if (e.target !== stage) {
+      // This is a right-click on an object, let the object handlers deal with it
+      return;
+    }
     
-    // Convert to actual canvas coordinates
-    const actualX = pos.x / 0.667;
-    const actualY = pos.y / 0.667;
+    const pos = stage.getPointerPosition();
+    const gridData = getGridCoordinates(pos.x, pos.y);
+    
     const snappedPos = {
-      x: Math.round(actualX),
-      y: Math.round(actualY)
+      x: gridData.snapX,
+      y: gridData.snapY,
+      pixelX: Math.round(pos.x),
+      pixelY: Math.round(pos.y)
     };
     
+    // Only show canvas menu when clicking on empty canvas (Stage)
     setContextMenu({
-      x: pos.x + stage.container().getBoundingClientRect().left,
-      y: pos.y + stage.container().getBoundingClientRect().top,
-      target: null, // No target = canvas menu
+      x: e.evt.clientX,
+      y: e.evt.clientY,
+      target: null, // Canvas menu has no target
       position: snappedPos
     });
   };
 
   // Handle mouse down for drawing
   const handleMouseDown = (e) => {
-    // Only start drawing if we're in a drawing mode and not already drawing
-    if (drawingMode === 'select' || isDrawing) return;
+    // Don't interfere with drag operations - check for various drag-related conditions
+    if (e.evt && (
+      e.evt.dataTransfer || 
+      e.evt.type === 'dragover' || 
+      e.evt.type === 'drop' ||
+      e.evt.buttons === 0 // No mouse button pressed (could be drag)
+    )) {
+      return;
+    }
     
+    // Also check if this is coming from a draggable element
+    if (e.target && e.target.attrs && e.target.attrs.draggable) {
+      return;
+    }
+    
+    // Group selection logic
+    if (drawingMode === 'group-select') {
+      // Allow group selection on stage or background images (non-draggable elements)
+      if (e.target !== stageRef.current && e.target.hasName('draggable')) {
+        return;
+      }
+      const pos = e.target.getStage().getPointerPosition();
+      
+      setSelectionBox({
+        visible: true,
+        x: pos.x,
+        y: pos.y,
+        startX: pos.x,
+        startY: pos.y,
+        width: 0,
+        height: 0,
+      });
+      return;
+    }
+
+    // Shape drawing logic
+    if (drawingMode !== 'select' && !isDrawing) {
     const stage = e.target.getStage();
     const pos = stage.getPointerPosition();
-    const actualX = pos.x / 0.667;
-    const actualY = pos.y / 0.667;
     
-    // Use raw coordinates for drawing
     setIsDrawing(true);
-    setDrawStart({ x: actualX, y: actualY });
-    setSelectedId(null);
+      setDrawStart({ x: pos.x, y: pos.y });
+      setSelectedIds([]);
     
-    // Show initial preview dot/shape at click position
     let initialPreview;
     if (drawingMode === 'circle') {
       initialPreview = {
         id: 'preview',
         type: drawingMode,
         shapeType: currentShapeType || 'boundary',
-        x: actualX,
-        y: actualY,
+          x: pos.x,
+          y: pos.y,
         width: 10,
         height: 10,
         radius: 5,
@@ -852,39 +1188,55 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
         id: 'preview',
         type: drawingMode,
         shapeType: currentShapeType || 'boundary',
-        x: actualX,
-        y: actualY,
+          x: pos.x,
+          y: pos.y,
         width: 10,
         height: 10,
         isPreview: true
       };
     }
-    setPreviewShape(initialPreview);
+      setNewShape(initialPreview);
+    }
   };
 
   // Handle mouse move for drawing
   const handleMouseMove = (e) => {
+    // Group selection logic
+    if (drawingMode === 'group-select' && selectionBox.visible) {
     const stage = e.target.getStage();
     const pos = stage.getPointerPosition();
-    const actualX = pos.x / 0.667;
-    const actualY = pos.y / 0.667;
-    
-    // Update mouse coordinates for copying
-    setMouseCoords({ x: Math.round(actualX), y: Math.round(actualY) });
-    
-    if (!isDrawing || drawingMode === 'select') {
+      
+      setSelectionBox(prev => ({
+        ...prev,
+        width: pos.x - prev.startX,
+        height: pos.y - prev.startY,
+      }));
       return;
     }
     
-    // Use raw coordinates for preview
-    const currentX = actualX;
-    const currentY = actualY;
+    const stage = e.target.getStage();
+    const pos = stage.getPointerPosition();
+    
+    // Update mouse position with both raw and grid-aligned coordinates
+    const gridData = getGridCoordinates(pos.x, pos.y);
+    setMousePos({ 
+      x: Math.round(pos.x), 
+      y: Math.round(pos.y),
+      gridX: gridData.gridX,
+      gridY: gridData.gridY,
+      snapX: gridData.snapX,
+      snapY: gridData.snapY
+    });
+    
+    // Shape drawing logic
+    if (isDrawing && drawingMode !== 'select') {
+      const currentX = pos.x;
+      const currentY = pos.y;
     const width = Math.abs(currentX - drawStart.x);
     const height = Math.abs(currentY - drawStart.y);
     
     let preview;
     if (drawingMode === 'circle') {
-      // For circles, calculate radius from the distance to mouse
       const radius = Math.max(Math.min(width, height) / 2, 5);
       preview = {
         id: 'preview',
@@ -909,132 +1261,347 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
         isPreview: true
       };
     }
-    setPreviewShape(preview);
+      setNewShape(preview);
+    }
   };
 
   // Handle mouse up for drawing
   const handleMouseUp = (e) => {
-    if (!isDrawing || drawingMode === 'select') return;
-    const stage = e.target.getStage();
-    const pos = stage.getPointerPosition();
-    const actualPos = {
-      x: pos.x / 0.667,
-      y: pos.y / 0.667
-    };
-    // Use raw coordinates for end position
-    const endPos = {
-      x: actualPos.x,
-      y: actualPos.y
-    };
-    const width = Math.abs(endPos.x - drawStart.x);
-    const height = Math.abs(endPos.y - drawStart.y);
-    if (width < 20 || height < 20) {
-      setIsDrawing(false);
-      setPreviewShape(null);
+    // Group selection logic
+    if (drawingMode === 'group-select' && selectionBox.visible) {
+      setSelectionBox(prev => ({ ...prev, visible: false }));
+      const stage = stageRef.current;
+      const box = {
+        x: Math.min(selectionBox.startX, selectionBox.startX + selectionBox.width),
+        y: Math.min(selectionBox.startY, selectionBox.startY + selectionBox.height),
+        width: Math.abs(selectionBox.width),
+        height: Math.abs(selectionBox.height),
+      };
+      const allNodes = stage.find('.draggable');
+      
+      const selected = allNodes.filter((node) => Konva.Util.haveIntersection(box, node.getClientRect()));
+      
+      const selectedObjectIds = selected.map((node) => node.id());
+      
+      setSelectedIds(selectedObjectIds);
+      setDrawingMode('select'); // Stay in select mode to maintain selection
+      
+      // If objects were selected, show group creation dialog
+      if (selectedObjectIds.length > 1) {
+        const selectedObjects = [
+          ...canvasAssets.filter(asset => selectedObjectIds.includes(asset.id)),
+          ...shapes.filter(shape => selectedObjectIds.includes(shape.id))
+        ];
+        
+
+        setGroupDialog({
+          isOpen: true,
+          selectedObjects: selectedObjects,
+          groupName: `Group ${savedGroups.length + 1}`,
+          groupDescription: `${selectedObjects.length} objects selected`
+        });
+      } else {
+
+      }
       return;
     }
+    
+    // Shape drawing logic
+    if (isDrawing && drawingMode !== 'select') {
+    const stage = e.target.getStage();
+    const pos = stage.getPointerPosition();
+      const endPos = { x: pos.x, y: pos.y };
+    const width = Math.abs(endPos.x - drawStart.x);
+    const height = Math.abs(endPos.y - drawStart.y);
+
+    if (width < 20 || height < 20) {
+      setIsDrawing(false);
+        setNewShape(null);
+      return;
+    }
+      
     const shapeId = `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    let newShape;
+      let finalShape;
     if (drawingMode === 'circle') {
       const radius = Math.min(width, height) / 2;
-      newShape = {
-        id: shapeId,
-        type: drawingMode,
-        shapeType: currentShapeType || 'boundary',
-        x: Math.min(drawStart.x, endPos.x),
-        y: Math.min(drawStart.y, endPos.y),
-        width: radius * 2,
-        height: radius * 2,
-        radius: radius,
-        locked: false
+        finalShape = {
+          id: shapeId, type: drawingMode, shapeType: currentShapeType || 'boundary',
+          x: Math.min(drawStart.x, endPos.x), y: Math.min(drawStart.y, endPos.y),
+          width: radius * 2, height: radius * 2, radius: radius, locked: false
       };
     } else {
-      newShape = {
-        id: shapeId,
-        type: drawingMode,
-        shapeType: currentShapeType || 'boundary',
-        x: Math.min(drawStart.x, endPos.x),
-        y: Math.min(drawStart.y, endPos.y),
-        width: width,
-        height: height,
-        locked: false
-      };
-    }
-    setShapes((prev) => [...prev, newShape]);
+        finalShape = {
+          id: shapeId, type: drawingMode, shapeType: currentShapeType || 'boundary',
+          x: Math.min(drawStart.x, endPos.x), y: Math.min(drawStart.y, endPos.y),
+          width: width, height: height, locked: false
+        };
+      }
+      setShapes((prev) => [...prev, finalShape]);
     setIsDrawing(false);
-    setPreviewShape(null);
+      setNewShape(null);
+    }
   };
 
   // Handle shape context menu
   const handleShapeContextMenu = (e, shape) => {
     e.evt.preventDefault();
-    const stage = e.target.getStage();
-    const pos = stage.getPointerPosition();
+    e.evt.stopPropagation(); // Stop propagation to prevent Stage handler from overriding
+    
+    // Use the actual mouse event position instead of stage position
+    const mouseX = e.evt.clientX;
+    const mouseY = e.evt.clientY;
     
     setContextMenu({
-      x: pos.x + stage.container().getBoundingClientRect().left,
-      y: pos.y + stage.container().getBoundingClientRect().top,
+      x: mouseX,
+      y: mouseY,
       target: shape
+    });
+  };
+
+  const handleAssetContextMenu = (e, asset) => {
+    e.evt.preventDefault();
+    e.evt.stopPropagation(); // Stop propagation to prevent Stage handler from overriding
+    
+    // Use the actual mouse event position instead of stage position
+    const mouseX = e.evt.clientX;
+    const mouseY = e.evt.clientY;
+    
+    setContextMenu({
+      x: mouseX,
+      y: mouseY,
+      target: { ...asset, isAsset: true } // Ensure isAsset flag is set
     });
   };
 
 
 
-  // Handle shape selection
-  const handleShapeSelect = (shapeId) => {
-    setSelectedId(shapeId);
-    // If AI assistant is open, let it handle the object click
-    if (aiAssistantOpen && aiAssistantRef.current) {
-      aiAssistantRef.current.handleObjectClick(shapeId);
-    }
-  };
-
   // Handle shape change
   const handleShapeChange = (updatedShape) => {
-    // Check if it's an asset or a shape
-    const isAsset = canvasAssets.find(asset => asset.id === updatedShape.id);
-    const isShape = shapes.find(shape => shape.id === updatedShape.id);
+    // For single shape updates
+    setShapes(shapes.map(s => (s.id === updatedShape.id ? updatedShape : s)));
+  };
+
+  const handleAssetChange = (updatedAsset) => {
+    setCanvasAssets(canvasAssets.map(a => (a.id === updatedAsset.id ? updatedAsset : a)));
+  };
+
+  const handleTransformEnd = () => {
+    const nodes = transformerRef.current.nodes();
+    const newShapes = shapes.slice();
+    const newAssets = canvasAssets.slice();
+
+    nodes.forEach(node => {
+      const id = node.id();
+      const isAsset = canvasAssets.some(a => a.id === id);
+      const scaleX = node.scaleX();
+      const scaleY = node.scaleY();
     
     if (isAsset) {
-      setCanvasAssets((prev) =>
-        prev.map((asset) => (asset.id === updatedShape.id ? updatedShape : asset))
-      );
-    } else if (isShape) {
-      setShapes((prev) =>
-        prev.map((shape) => (shape.id === updatedShape.id ? updatedShape : shape))
-      );
-    }
+        const index = newAssets.findIndex(a => a.id === id);
+        if (index !== -1) {
+          const asset = newAssets[index];
+          const newWidth = Math.max(10, (asset.width || 100) * scaleX);
+          const newHeight = Math.max(10, (asset.height || 100) * scaleY);
+          
+          newAssets[index] = {
+            ...asset,
+            x: node.x(),
+            y: node.y(),
+            width: newWidth,
+            height: newHeight,
+            rotation: node.rotation(),
+          };
+          
+          // Reset scale
+          node.scaleX(1);
+          node.scaleY(1);
+        }
+      } else {
+        const index = newShapes.findIndex(s => s.id === id);
+        if (index !== -1) {
+          const shape = newShapes[index];
+          
+          if (shape.type === 'circle') {
+            // Handle circle resizing
+            const newRadius = Math.max(5, (shape.radius || 50) * Math.max(scaleX, scaleY));
+            newShapes[index] = {
+              ...shape,
+              x: node.x(),
+              y: node.y(),
+              radius: newRadius,
+              width: newRadius * 2,
+              height: newRadius * 2,
+              rotation: node.rotation(),
+            };
+          } else {
+            // Handle rectangle resizing
+            const newWidth = Math.max(5, (shape.width || 100) * scaleX);
+            const newHeight = Math.max(5, (shape.height || 100) * scaleY);
+            
+            newShapes[index] = {
+              ...shape,
+              x: node.x(),
+              y: node.y(),
+              width: newWidth,
+              height: newHeight,
+              rotation: node.rotation(),
+            };
+          }
+          
+          // Reset scale
+          node.scaleX(1);
+          node.scaleY(1);
+        }
+      }
+    });
+
+    setShapes(newShapes);
+    setCanvasAssets(newAssets);
+    
+    // Force transformer to update after changes
+    setTimeout(() => {
+      if (transformerRef.current) {
+        transformerRef.current.forceUpdate();
+        transformerRef.current.getLayer()?.batchDraw();
+      }
+    }, 0);
   };
 
   // Handle coordinate click to copy or insert into AI chat
   const handleCoordinateClick = async () => {
-    const coordText = `x: ${mouseCoords.x}, y: ${mouseCoords.y}`;
+    const coordText = `x: ${mousePos.x}, y: ${mousePos.y}`;
     
     // If AI assistant is open, insert coordinates into chat
-    if (aiAssistantOpen && aiAssistantRef.current) {
+    if (aiAssistant.isOpen) {
+      if (aiAssistantRef.current) {
       aiAssistantRef.current.insertCoordinates(coordText);
-      setShowCopyNotification(true);
-      setTimeout(() => setShowCopyNotification(false), 2000);
+      }
+      setCoordinates({ x: mousePos.x, y: mousePos.y });
       return;
     }
     
     // Otherwise, copy to clipboard
     try {
       await navigator.clipboard.writeText(coordText);
-      setShowCopyNotification(true);
-      setTimeout(() => setShowCopyNotification(false), 2000);
+      setCoordinates({ x: mousePos.x, y: mousePos.y });
     } catch (err) {
-      console.log('Fallback: Could not copy to clipboard');
+      // Silent fail is acceptable here.
+    }
+  };
+
+  // Group management functions
+  const handleCreateGroup = () => {
+    if (groupDialog.selectedObjects.length === 0) return;
+    
+    const newGroup = {
+      id: `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name: groupDialog.groupName || `Group ${savedGroups.length + 1}`,
+      description: groupDialog.groupDescription || '',
+      objectIds: groupDialog.selectedObjects.map(obj => obj.id),
+      objects: groupDialog.selectedObjects,
+      createdAt: new Date().toISOString(),
+      bounds: calculateGroupBounds(groupDialog.selectedObjects)
+    };
+    
+    setSavedGroups(prev => [...prev, newGroup]);
+    setGroupDialog({ isOpen: false, selectedObjects: [], groupName: '', groupDescription: '' });
+    
+    // Show success message
+    setCoordinates({ x: mousePos.x, y: mousePos.y });
+  };
+
+  const calculateGroupBounds = (objects) => {
+    if (objects.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
+    
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    
+    objects.forEach(obj => {
+      const x = obj.x || 0;
+      const y = obj.y || 0;
+      const width = obj.width || 100;
+      const height = obj.height || 100;
+      
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + width);
+      maxY = Math.max(maxY, y + height);
+    });
+    
+    return {
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY
+    };
+  };
+
+  const handleSelectGroup = (group) => {
+    // Find current objects that still exist
+    const existingObjectIds = group.objectIds.filter(id => 
+      canvasAssets.some(asset => asset.id === id) || 
+      shapes.some(shape => shape.id === id)
+    );
+    
+    setSelectedIds(existingObjectIds);
+    setShowGroupPanel(false);
+    
+    // If AI assistant is open, send group info to chat
+    if (aiAssistant.isOpen) {
+      setAIAssistant(prev => ({
+        ...prev,
+        target: group,
+        context: 'group'
+      }));
+    }
+  };
+
+  const handleDeleteGroup = (groupId) => {
+    setSavedGroups(prev => prev.filter(group => group.id !== groupId));
+  };
+
+  const handleSendGroupToAI = (group) => {
+    if (!aiAssistant.isOpen) {
+      setAIAssistant({
+        isOpen: true,
+        target: group,
+        context: 'group'
+      });
+      // Wait for AI Assistant to open, then send group info
+      setTimeout(() => {
+        if (aiAssistantRef.current) {
+          aiAssistantRef.current.addGroupToChat(group);
+        }
+      }, 100);
+    } else {
+      // Send group info to existing AI chat
+      if (aiAssistantRef.current) {
+        aiAssistantRef.current.addGroupToChat(group);
+      }
     }
   };
 
   return (
     <div
       className="grid-canvas"
+      style={{ 
+        position: 'relative', 
+        background: '#1e1e1e', 
+        width: '100%', 
+        height: '100%',
+        userSelect: 'none',
+        WebkitUserDrag: 'none',
+        KhtmlUserDrag: 'none',
+        MozUserDrag: 'none',
+        OUserDrag: 'none',
+        userDrag: 'none'
+      }}
+      onDragOver={handleDragOver}
       onDrop={handleDrop}
-      onDragOver={(e) => e.preventDefault()}
-      onClick={() => setContextMenu(null)} // Close context menu on click
-      style={{ position: 'relative' }}
+      onDragStart={(e) => {
+        // Prevent native drag operations on the canvas container
+        e.preventDefault();
+        e.stopPropagation();
+      }}
     >
       {/* Epic Particle System Overlay */}
       <ParticleSystem 
@@ -1048,38 +1615,50 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
       />
       
       <Stage 
-        width={1920} 
-        height={1080} 
-        scaleX={0.667}
-        scaleY={0.667}
+        width={window.innerWidth} 
+        height={window.innerHeight} 
         ref={stageRef}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onContextMenu={handleCanvasRightClick}
+        onClick={handleCanvasClick}
+        onDragStart={(e) => {
+          // Prevent native drag operations on the Stage
+          e.evt.preventDefault();
+          e.evt.stopPropagation();
+        }}
       >
         <Layer>
-          {drawGrid(1920, 1080)}
+          {drawGrid(window.innerWidth, window.innerHeight)}
           
           {/* Render shapes */}
           {shapes.map((shape) => {
+            const isSelected = selectedIds.includes(shape.id);
             return (
               <DrawableShape
                 key={shape.id}
                 shape={shape}
-                isSelected={selectedId === shape.id}
-                onSelect={() => handleShapeSelect(shape.id)}
+                isSelected={isSelected}
+                onSelect={() => {
+                  if (!isSelected) {
+                    setSelectedIds([shape.id]);
+                  }
+                }}
                 onChange={handleShapeChange}
-                onContextMenu={handleShapeContextMenu}
+                onContextMenu={(e) => handleShapeContextMenu(e, shape)}
+                name="draggable"
               />
             );
           })}
           
           {/* Render preview shape */}
-          {previewShape && (
+          {newShape && (
             <DrawableShape
               key="preview"
-              shape={previewShape}
+              shape={newShape}
               isSelected={false}
               onSelect={() => {}}
               onChange={() => {}}
@@ -1088,16 +1667,54 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
           )}
           
           {/* Render assets */}
-          {canvasAssets.map((asset) => (
-            <AssetImage
+          {canvasAssets.map((asset) => {
+            const isSelected = selectedIds.includes(asset.id);
+            const AssetComponent = asset.isAudio ? AudioAsset : AssetImage;
+            
+            return (
+              <AssetComponent
               key={asset.id}
               asset={asset}
-              isSelected={selectedId === asset.id}
-              onSelect={() => handleShapeSelect(asset.id)}
-              onChange={handleShapeChange}
-              onContextMenu={handleShapeContextMenu}
+                isSelected={isSelected}
+                onSelect={() => {
+                  if (!isSelected) {
+                    setSelectedIds([asset.id]);
+                  }
+                }}
+                onChange={handleAssetChange}
+                onContextMenu={(e) => handleAssetContextMenu(e, asset)}
+                name="draggable"
+              />
+            );
+          })}
+
+          <Transformer 
+            ref={transformerRef} 
+            onTransformEnd={handleTransformEnd}
+            onDragEnd={handleTransformEnd}
+            boundBoxFunc={(oldBox, newBox) => {
+              // limit resize
+              if (newBox.width < 5 || newBox.height < 5) {
+                return oldBox;
+              }
+              return newBox;
+            }}
+          />
+
+          {/* Selection box - render last so it's always visible on top */}
+          {selectionBox.visible && (
+            <Rect
+              x={selectionBox.x}
+              y={selectionBox.y}
+              width={selectionBox.width}
+              height={selectionBox.height}
+              fill="rgba(0, 161, 255, 0.3)"
+              stroke="#00a1ff"
+              strokeWidth={2}
+              strokeDashArray={[5, 5]}
+              listening={false}
             />
-          ))}
+          )}
         </Layer>
       </Stage>
       
@@ -1114,54 +1731,7 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
         />
       )}
       
-      {/* Clickable coordinates display */}
-      <div 
-        onClick={handleCoordinateClick}
-        style={{
-          position: 'absolute',
-          bottom: 4,
-          right: 8,
-          background: 'rgba(0, 0, 0, 0.7)',
-          color: aiAssistantOpen ? '#45b7d1' : '#4ecdc4',
-          padding: '4px 8px',
-          borderRadius: 4,
-          fontSize: 11,
-          fontFamily: 'monospace',
-          cursor: 'pointer',
-          border: `1px solid ${aiAssistantOpen ? 'rgba(69, 183, 209, 0.5)' : 'rgba(78, 205, 196, 0.3)'}`,
-          transition: 'all 0.2s ease'
-        }}
-        onMouseEnter={(e) => {
-          const color = aiAssistantOpen ? '#45b7d1' : '#4ecdc4';
-          e.target.style.background = `rgba(${aiAssistantOpen ? '69, 183, 209' : '78, 205, 196'}, 0.2)`;
-          e.target.style.borderColor = color;
-        }}
-        onMouseLeave={(e) => {
-          e.target.style.background = 'rgba(0, 0, 0, 0.7)';
-          e.target.style.borderColor = aiAssistantOpen ? 'rgba(69, 183, 209, 0.5)' : 'rgba(78, 205, 196, 0.3)';
-        }}
-        title={aiAssistantOpen ? "Click to insert coordinates into AI chat" : "Click to copy coordinates"}
-      >
-        📍 {mouseCoords.x}, {mouseCoords.y} | Mode: {drawingMode || 'select'}
-      </div>
 
-      {/* Copy/Insert notification */}
-      {showCopyNotification && (
-        <div style={{
-          position: 'absolute',
-          bottom: 40,
-          right: 8,
-          background: aiAssistantOpen ? 'rgba(69, 183, 209, 0.9)' : 'rgba(78, 205, 196, 0.9)',
-          color: 'white',
-          padding: '4px 8px',
-          borderRadius: 4,
-          fontSize: 10,
-          fontWeight: 'bold',
-          animation: 'fadeIn 0.3s ease'
-        }}>
-          {aiAssistantOpen ? '💬 Inserted into chat:' : '📋 Copied:'} x: {mouseCoords.x}, y: {mouseCoords.y}
-        </div>
-      )}
       
       {/* Drawing mode indicator */}
       {drawingMode !== 'select' && (
@@ -1179,17 +1749,51 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
           Drawing: {drawingMode} ({currentShapeType})
           {isDrawing && (
             <div style={{ fontSize: 9, opacity: 0.7, marginTop: 2 }}>
-              Start: {drawStart.x}, {drawStart.y}
+              Start: {Math.round(drawStart.x)}, {Math.round(drawStart.y)}
             </div>
           )}
         </div>
       )}
+
+      {/* Live Coordinate Display - Bottom Left */}
+      <div style={{
+        position: 'absolute',
+        bottom: 8,
+        left: 8,
+        background: 'rgba(0, 0, 0, 0.8)',
+        color: '#fff',
+        padding: '8px 12px',
+        borderRadius: 6,
+        fontSize: 12,
+        fontFamily: 'monospace',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
+        userSelect: 'none',
+        pointerEvents: 'none',
+        zIndex: 1000
+      }}>
+        <div style={{ marginBottom: 4, fontSize: 11, opacity: 0.7, fontWeight: 'bold' }}>
+          📍 LIVE COORDINATES
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ color: '#4ecdc4' }}>
+            Pixel: {Math.round(mousePos.x)}, {Math.round(mousePos.y)}
+          </div>
+          <div style={{ color: '#ffd93d' }}>
+            Grid: ({Math.round(mousePos.x / GRID_SIZE)}, {Math.round(mousePos.y / GRID_SIZE)})
+          </div>
+          <div style={{ color: '#ff6b6b', fontSize: 10 }}>
+            Snap: {snapToGrid(mousePos.x)}, {snapToGrid(mousePos.y)}
+          </div>
+        </div>
+      </div>
       
       {/* AI Game Assistant */}
       <AIGameAssistant
         ref={aiAssistantRef}
-        isOpen={aiAssistantOpen}
-        onClose={() => setAiAssistantOpen(false)}
+        isOpen={aiAssistant.isOpen}
+        onClose={() => setAIAssistant({ isOpen: false, target: null, context: null })}
         canvasAssets={canvasAssets}
         shapes={shapes}
         onUpdateProject={(updatedData) => {
@@ -1210,9 +1814,285 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
             );
           }
         }}
-        selectedObjectId={selectedId}
-        onSelectObject={setSelectedId}
+        selectedObjectId={selectedIds[0]}
+        onSelectObject={setSelectedIds}
       />
+
+      {/* Group Creation Dialog */}
+      {groupDialog.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10001
+        }}>
+          <div style={{
+            background: '#2d2d30',
+            border: '1px solid #404040',
+            borderRadius: 8,
+            padding: 24,
+            minWidth: 400,
+            maxWidth: 500,
+            color: '#cccccc',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', color: '#fff' }}>🎯 Create Group</h3>
+            <p style={{ margin: '0 0 16px 0', fontSize: 14, opacity: 0.8 }}>
+              {groupDialog.selectedObjects.length} objects selected
+            </p>
+            
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 12, fontWeight: 'bold' }}>
+                Group Name:
+              </label>
+              <input
+                type="text"
+                value={groupDialog.groupName}
+                onChange={(e) => setGroupDialog(prev => ({ ...prev, groupName: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: 8,
+                  background: '#1e1e1e',
+                  border: '1px solid #404040',
+                  borderRadius: 4,
+                  color: '#cccccc',
+                  fontSize: 14
+                }}
+                placeholder="Enter group name..."
+              />
+            </div>
+            
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 12, fontWeight: 'bold' }}>
+                Description:
+              </label>
+              <textarea
+                value={groupDialog.groupDescription}
+                onChange={(e) => setGroupDialog(prev => ({ ...prev, groupDescription: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: 8,
+                  background: '#1e1e1e',
+                  border: '1px solid #404040',
+                  borderRadius: 4,
+                  color: '#cccccc',
+                  fontSize: 14,
+                  minHeight: 60,
+                  resize: 'vertical'
+                }}
+                placeholder="Describe this group for the AI assistant..."
+              />
+            </div>
+            
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setGroupDialog({ isOpen: false, selectedObjects: [], groupName: '', groupDescription: '' })}
+                style={{
+                  padding: '8px 16px',
+                  background: 'transparent',
+                  border: '1px solid #404040',
+                  borderRadius: 4,
+                  color: '#cccccc',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateGroup}
+                style={{
+                  padding: '8px 16px',
+                  background: '#007acc',
+                  border: 'none',
+                  borderRadius: 4,
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontWeight: 'bold'
+                }}
+              >
+                Create Group
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Notepad Button - Always visible and prominent */}
+      <button
+        onClick={() => setAIAssistant({
+          isOpen: true,
+          target: null,
+          context: 'manual'
+        })}
+        style={{
+          position: 'absolute',
+          top: 8,
+          right: 8,
+          background: aiAssistant.isOpen ? 'rgba(78, 205, 196, 0.7)' : 'rgba(78, 205, 196, 0.6)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          border: aiAssistant.isOpen ? '2px solid rgba(78, 205, 196, 0.8)' : '2px solid rgba(78, 205, 196, 0.5)',
+          borderRadius: 8,
+          color: 'white',
+          padding: '12px 20px',
+          cursor: 'pointer',
+          fontSize: 14,
+          fontWeight: 'bold',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+          transition: 'all 0.2s ease',
+          zIndex: 1001
+        }}
+        onMouseEnter={(e) => {
+          if (!aiAssistant.isOpen) {
+            e.target.style.transform = 'translateY(-2px)';
+            e.target.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.4)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!aiAssistant.isOpen) {
+            e.target.style.transform = 'translateY(0)';
+            e.target.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+          }
+        }}
+      >
+        📝 {aiAssistant.isOpen ? 'Notepad Open' : 'AI Notepad'}
+      </button>
+
+      {/* Groups Panel Toggle Button */}
+      {savedGroups.length > 0 && (
+        <button
+          onClick={() => setShowGroupPanel(!showGroupPanel)}
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: aiAssistant.isOpen ? 180 : 140,
+            background: 'rgba(0, 0, 0, 0.8)',
+            border: '1px solid #404040',
+            borderRadius: 4,
+            color: '#4ecdc4',
+            padding: '6px 12px',
+            cursor: 'pointer',
+            fontSize: 12,
+            fontFamily: 'monospace',
+            transition: 'right 0.2s ease'
+          }}
+        >
+          📦 Groups ({savedGroups.length})
+        </button>
+      )}
+
+      {/* Groups Management Panel */}
+      {showGroupPanel && (
+        <div style={{
+          position: 'absolute',
+          top: 50,
+          right: 8,
+          background: 'rgba(0, 0, 0, 0.9)',
+          border: '1px solid #404040',
+          borderRadius: 8,
+          padding: 16,
+          minWidth: 300,
+          maxWidth: 400,
+          maxHeight: 400,
+          overflowY: 'auto',
+          color: '#cccccc',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          fontSize: 12,
+          zIndex: 1000
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h4 style={{ margin: 0, color: '#fff' }}>📦 Saved Groups</h4>
+            <button
+              onClick={() => setShowGroupPanel(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#666',
+                cursor: 'pointer',
+                fontSize: 16
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          
+          {savedGroups.map(group => (
+            <div key={group.id} style={{
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid #404040',
+              borderRadius: 6,
+              padding: 12,
+              marginBottom: 12
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontWeight: 'bold', color: '#fff', marginBottom: 4 }}>{group.name}</div>
+                  <div style={{ fontSize: 11, opacity: 0.7 }}>{group.objects.length} objects</div>
+                </div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button
+                    onClick={() => handleSelectGroup(group)}
+                    style={{
+                      background: '#007acc',
+                      border: 'none',
+                      borderRadius: 3,
+                      color: 'white',
+                      padding: '4px 8px',
+                      cursor: 'pointer',
+                      fontSize: 10
+                    }}
+                    title="Select group objects"
+                  >
+                    📍
+                  </button>
+                  <button
+                    onClick={() => handleSendGroupToAI(group)}
+                    style={{
+                      background: '#4CAF50',
+                      border: 'none',
+                      borderRadius: 3,
+                      color: 'white',
+                      padding: '4px 8px',
+                      cursor: 'pointer',
+                      fontSize: 10
+                    }}
+                    title="Send to AI Assistant"
+                  >
+                    🤖
+                  </button>
+                  <button
+                    onClick={() => handleDeleteGroup(group.id)}
+                    style={{
+                      background: '#ff6b6b',
+                      border: 'none',
+                      borderRadius: 3,
+                      color: 'white',
+                      padding: '4px 8px',
+                      cursor: 'pointer',
+                      fontSize: 10
+                    }}
+                    title="Delete group"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+              {group.description && (
+                <div style={{ fontSize: 11, opacity: 0.8, fontStyle: 'italic' }}>
+                  {group.description}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

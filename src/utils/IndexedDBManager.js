@@ -53,7 +53,6 @@ class IndexedDBManager {
         request.onerror = () => reject(request.error);
       });
 
-      console.log(`Project "${projectName}" saved to IndexedDB successfully`);
       return true;
     } catch (error) {
       console.error('Failed to save project to IndexedDB:', error);
@@ -71,17 +70,17 @@ class IndexedDBManager {
       
       const project = await new Promise((resolve, reject) => {
         const request = store.get(projectName);
-        request.onsuccess = () => resolve(request.result);
+        request.onsuccess = () => {
+          if (request.result) {
+            resolve(request.result);
+          } else {
+            resolve(null);
+          }
+        };
         request.onerror = () => reject(request.error);
       });
 
-      if (project) {
-        console.log(`Project "${projectName}" loaded from IndexedDB successfully`);
-        return project;
-      } else {
-        console.log(`Project "${projectName}" not found in IndexedDB`);
-        return null;
-      }
+      return project;
     } catch (error) {
       console.error('Failed to load project from IndexedDB:', error);
       return null;
@@ -123,7 +122,6 @@ class IndexedDBManager {
         request.onerror = () => reject(request.error);
       });
 
-      console.log(`Project "${projectName}" deleted from IndexedDB`);
       return true;
     } catch (error) {
       console.error('Failed to delete project from IndexedDB:', error);
