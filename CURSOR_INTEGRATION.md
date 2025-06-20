@@ -1,8 +1,8 @@
 # 🤖 Cursor IDE Integration Guide
 
-*Maximize your AI-assisted game development with Game Engine v5*
+*Maximize your AI-assisted game development with Game Engine v6*
 
-## 🎯 Why Cursor + Game Engine v5?
+## 🎯 Why Cursor + Game Engine v6?
 
 This game engine is specifically designed for AI-assisted development:
 - **Clean, readable codebase** with zero ESLint errors that AI can understand and modify

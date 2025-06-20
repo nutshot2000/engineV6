@@ -1,8 +1,8 @@
-# 🎮 Game Engine v5
+# 🎮 Game Engine v6
 
 A modern, browser-based 2D game engine built with React and Konva. Perfect for rapid prototyping, level design, and game development with AI-powered assistance.
 
-![Game Engine v5](https://img.shields.io/badge/Version-5.0-blue) ![React](https://img.shields.io/badge/React-19.1.0-61dafb) ![Konva](https://img.shields.io/badge/Konva-9.3.20-orange) ![License](https://img.shields.io/badge/License-MIT-green)
+![Game Engine v6](https://img.shields.io/badge/Version-6.0-blue) ![React](https://img.shields.io/badge/React-19.1.0-61dafb) ![Konva](https://img.shields.io/badge/Konva-9.3.20-orange) ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## ✨ Features
 

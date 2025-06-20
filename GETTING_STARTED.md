@@ -1,4 +1,4 @@
-# 🚀 Getting Started with Game Engine v5
+# 🚀 Getting Started with Game Engine v6
 
 *A beginner-friendly guide to get you up and running in 5 minutes*
 
@@ -141,4 +141,4 @@ Once you're comfortable with the basics:
 
 ---
 
-**Welcome to Game Engine v5! Start creating and have fun!** 🎮✨ 
+**Welcome to Game Engine v6! Start creating and have fun!** 🎮✨ 
