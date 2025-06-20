@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import Sidebar from "./components/Sidebar";
 import GridCanvas from "./components/GridCanvas";
 import SaveMenu from "./components/SaveMenu";
+import ErrorBoundary from './ErrorBoundary';
 
 import IndexedDBManager from "./utils/IndexedDBManager";
 import "./index.css";
@@ -101,84 +102,84 @@ function App() {
   // Tool selection handlers removed - using right-click only
 
   return (
-    <div className="app-container">
-
-      
-      <div className="top-bar">
-        <div className="top-bar-content">
-          <h1 className="app-title">Game Engine v5</h1>
-          <div className="top-bar-buttons">
-            <button
-              onClick={handleClearScene}
-              className="top-bar-button clear-scene-button"
-            >
-              🗑️ Clear Scene
-            </button>
-            <SaveMenu 
-              assets={assets} 
-              canvasAssets={canvasAssets}
-              shapes={shapes}
-              onLoad={handleProjectLoad} 
-            />
+    <ErrorBoundary>
+      <div className="app-container">
+        <div className="top-bar">
+          <div className="top-bar-content">
+            <h1 className="app-title">Game Engine v5</h1>
+            <div className="top-bar-buttons">
+              <button
+                onClick={handleClearScene}
+                className="top-bar-button clear-scene-button"
+              >
+                🗑️ Clear Scene
+              </button>
+              <SaveMenu 
+                assets={assets} 
+                canvasAssets={canvasAssets}
+                shapes={shapes}
+                onLoad={handleProjectLoad} 
+              />
+            </div>
+          </div>
+        </div>
+        <div className="main-layout">
+          <Sidebar 
+            assets={assets} 
+            setAssets={setAssets} 
+            onAddToNotes={sidebarNotesCallback}
+          />
+          <div className="main-content">
+            <div className="canvas-viewport">
+              <GridCanvas 
+                canvasAssets={canvasAssets}
+                setCanvasAssets={setCanvasAssets}
+                shapes={shapes}
+                setShapes={setShapes}
+                drawingMode={drawingMode}
+                setDrawingMode={setDrawingMode}
+                currentShapeType={currentShapeType}
+                setCurrentShapeType={setCurrentShapeType}
+                onRegisterSidebarCallback={setSidebarNotesCallback}
+              />
+            </div>
+          </div>
+          <div className="tools-panel">
+            <div className="tools-header">
+              <h3>Tools</h3>
+            </div>
+            
+            <div className="tool-section">
+              <button 
+                className={`tool-button ${drawingMode === 'select' ? 'active' : ''}`}
+                onClick={() => setDrawingMode('select')}
+              >
+                🖱️ Select
+              </button>
+            </div>
+            
+            <div className="tool-section">
+              <p style={{ color: '#888', fontSize: '12px', fontStyle: 'italic', margin: '16px 0' }}>
+                Clean game engine ready for development
+              </p>
+            </div>
+            
+            <div className="tool-section">
+              <p style={{ color: '#888', fontSize: '12px', fontStyle: 'italic', margin: '16px 0' }}>
+                Use right-click on canvas to add shapes
+              </p>
+            </div>
+            
+            <div className="tool-section">
+              <h4>Asset Management</h4>
+              <p style={{ color: '#666', fontSize: '11px', margin: '8px 0' }}>
+                Use "Browse Asset Folder" to load images from any directory on your computer. Assets will appear in the sidebar for drag-and-drop.
+              </p>
+            </div>
           </div>
         </div>
       </div>
-      <div className="main-layout">
-        <Sidebar 
-          assets={assets} 
-          setAssets={setAssets} 
-          onAddToNotes={sidebarNotesCallback}
-        />
-        <div className="main-content">
-          <div className="canvas-viewport">
-            <GridCanvas 
-              canvasAssets={canvasAssets}
-              setCanvasAssets={setCanvasAssets}
-              shapes={shapes}
-              setShapes={setShapes}
-              drawingMode={drawingMode}
-              setDrawingMode={setDrawingMode}
-              currentShapeType={currentShapeType}
-              setCurrentShapeType={setCurrentShapeType}
-              onRegisterSidebarCallback={setSidebarNotesCallback}
-            />
-          </div>
-        </div>
-        <div className="tools-panel">
-          <div className="tools-header">
-            <h3>Tools</h3>
-          </div>
-          
-          <div className="tool-section">
-            <button 
-              className={`tool-button ${drawingMode === 'select' ? 'active' : ''}`}
-              onClick={() => setDrawingMode('select')}
-            >
-              🖱️ Select
-            </button>
-          </div>
-          
-          <div className="tool-section">
-            <p style={{ color: '#888', fontSize: '12px', fontStyle: 'italic', margin: '16px 0' }}>
-              Clean game engine ready for development
-            </p>
-          </div>
-          
-          <div className="tool-section">
-            <p style={{ color: '#888', fontSize: '12px', fontStyle: 'italic', margin: '16px 0' }}>
-              Use right-click on canvas to add shapes
-            </p>
-          </div>
-          
-          <div className="tool-section">
-            <h4>Asset Management</h4>
-            <p style={{ color: '#666', fontSize: '11px', margin: '8px 0' }}>
-              Use "Browse Asset Folder" to load images from any directory on your computer. Assets will appear in the sidebar for drag-and-drop.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+    </ErrorBoundary>
   );
 }
 

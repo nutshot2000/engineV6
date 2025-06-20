@@ -7,20 +7,30 @@ function Sidebar({ assets, setAssets, onAddToNotes }) {
   const [isScanning, setIsScanning] = useState(false);
   const [currentFolder, setCurrentFolder] = useState(null);
 
+  const MAX_ASSET_SIZE = 10 * 1024 * 1024; // 10MB
+  const SUPPORTED_TYPES = [
+    'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp',
+    'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/x-m4a', 'audio/aac', 'audio/flac'
+  ];
+
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
-    const mediaFiles = files.filter(file => 
-      file.type.startsWith('image/') || 
-      file.type.startsWith('audio/') ||
-      /\.(png|jpg|jpeg|gif|svg|webp|bmp|mp3|wav|ogg|m4a|aac|flac)$/i.test(file.name)
-    );
-
-    if (mediaFiles.length === 0) return;
-
+    const validFiles = files.filter(file => {
+      if (!SUPPORTED_TYPES.includes(file.type)) {
+        alert(`Unsupported file type: ${file.name}`);
+        return false;
+      }
+      if (file.size > MAX_ASSET_SIZE) {
+        alert(`File too large (max 10MB): ${file.name}`);
+        return false;
+      }
+      return true;
+    });
+    if (validFiles.length === 0) return;
     setIsScanning(true);
     
     try {
-      const newAssets = await Promise.all(mediaFiles.map(async (file) => {
+      const newAssets = await Promise.all(validFiles.map(async (file) => {
         return new Promise((resolve) => {
           const reader = new FileReader();
           reader.onload = (e) => {
@@ -58,14 +68,20 @@ function Sidebar({ assets, setAssets, onAddToNotes }) {
       setCurrentFolder(folderPath);
 
       // Filter for image and audio files
-      const mediaFiles = files.filter(file => 
-        file.type.startsWith('image/') || 
-        file.type.startsWith('audio/') ||
-        /\.(png|jpg|jpeg|gif|svg|webp|bmp|mp3|wav|ogg|m4a|aac|flac)$/i.test(file.name)
-      );
+      const validFiles = files.filter(file => {
+        if (!SUPPORTED_TYPES.includes(file.type)) {
+          alert(`Unsupported file type: ${file.name}`);
+          return false;
+        }
+        if (file.size > MAX_ASSET_SIZE) {
+          alert(`File too large (max 10MB): ${file.name}`);
+          return false;
+        }
+        return true;
+      });
 
       // Create asset objects
-      const newAssets = await Promise.all(mediaFiles.map(async (file) => {
+      const newAssets = await Promise.all(validFiles.map(async (file) => {
         const relativePath = file.webkitRelativePath;
         const pathParts = relativePath.split('/');
         const folder = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'root';
