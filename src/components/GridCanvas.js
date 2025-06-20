@@ -57,6 +57,7 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
   const [viewportPosition, setViewportPosition] = useState({ x: 0, y: 0 });
 
   const [savedGroups, setSavedGroups] = useState([]);
+  const [gameMode, setGameMode] = useState(false);
 
   // Handle viewport scaling and positioning for perfect 16:9 aspect ratio
   useEffect(() => {
@@ -144,6 +145,74 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
       transformerRef.current.getLayer()?.batchDraw();
     }
   }, [selectedIds]);
+
+  // Keyboard movement for selected asset or player in game mode
+  useEffect(() => {
+    let animationFrame = null;
+    let heldKeys = {};
+    let lastMoveTime = 0;
+    const MOVE_INTERVAL = 16; // ms, ~60fps
+    const BASE_STEP = 5;
+
+    function moveAsset(assetIndex, dx, dy) {
+      setCanvasAssets(prev => prev.map((a, i) => i === assetIndex ? { ...a, x: Math.max(0, Math.min(VIEWPORT_WIDTH - (a.width || 1), (a.x || 0) + dx)), y: Math.max(0, Math.min(VIEWPORT_HEIGHT - (a.height || 1), (a.y || 0) + dy)) } : a));
+    }
+
+    function moveSelectedOrPlayer() {
+      let assetIndex = -1;
+      if (gameMode) {
+        assetIndex = canvasAssets.findIndex(a => a.isPlayer);
+      } else if (selectedIds.length > 0) {
+        assetIndex = canvasAssets.findIndex(a => a.id === selectedIds[0]);
+      }
+      if (assetIndex === -1) return;
+      const asset = canvasAssets[assetIndex];
+      let dx = 0, dy = 0;
+      const step = heldKeys['Shift'] ? GRID_SIZE : BASE_STEP;
+      if (heldKeys['ArrowLeft']) dx -= step;
+      if (heldKeys['ArrowRight']) dx += step;
+      if (heldKeys['ArrowUp']) dy -= step;
+      if (heldKeys['ArrowDown']) dy += step;
+      if (dx !== 0 || dy !== 0) {
+        const now = Date.now();
+        if (now - lastMoveTime > MOVE_INTERVAL) {
+          lastMoveTime = now;
+          moveAsset(assetIndex, dx, dy);
+        }
+      }
+      animationFrame = requestAnimationFrame(moveSelectedOrPlayer);
+    }
+
+    function handleKeyDown(e) {
+      if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Shift"].includes(e.key)) {
+        heldKeys[e.key] = true;
+        e.preventDefault();
+        if (!animationFrame) {
+          lastMoveTime = 0;
+          moveSelectedOrPlayer();
+        }
+      }
+    }
+    function handleKeyUp(e) {
+      if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Shift"].includes(e.key)) {
+        heldKeys[e.key] = false;
+        e.preventDefault();
+        if (!heldKeys['ArrowLeft'] && !heldKeys['ArrowRight'] && !heldKeys['ArrowUp'] && !heldKeys['ArrowDown']) {
+          if (animationFrame) {
+            cancelAnimationFrame(animationFrame);
+            animationFrame = null;
+          }
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+    };
+  }, [selectedIds, canvasAssets, gameMode]);
 
   const handleCanvasClick = (e) => {
     // Close context menu if open
@@ -515,6 +584,15 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
         );
         break;
         
+      case 'set-player': {
+        setCanvasAssets(prev => prev.map(a => a.id === target.id ? { ...a, isPlayer: true } : { ...a, isPlayer: false }));
+        break;
+      }
+      case 'unset-player': {
+        setCanvasAssets(prev => prev.map(a => a.id === target.id ? { ...a, isPlayer: false } : a));
+        break;
+      }
+      
       default:
         // No action needed for unknown actions
         break;
@@ -1084,15 +1162,28 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
             />
           )}
           
-          {/* Render assets */}
-          {canvasAssets.map((asset) => {
-            const isSelected = selectedIds.includes(asset.id);
-            const AssetComponent = asset.isAudio ? AudioAsset : AssetImage;
-            
-            return (
-              <AssetComponent
+          {/* Render background/locked assets first (non-moveable, non-selectable) */}
+          {canvasAssets.filter(asset => asset.locked).map((asset) => (
+            <AssetImage
               key={asset.id}
               asset={asset}
+              isSelected={false}
+              onSelect={() => {}}
+              onChange={() => {}}
+              onContextMenu={() => {}}
+              name="background"
+              pixelPerfect={false}
+            />
+          ))}
+
+          {/* Render all other (moveable/selectable) assets above */}
+          {canvasAssets.filter(asset => !asset.locked).map((asset) => {
+            const isSelected = selectedIds.includes(asset.id);
+            const AssetComponent = asset.isAudio ? AudioAsset : AssetImage;
+            return (
+              <AssetComponent
+                key={asset.id}
+                asset={asset}
                 isSelected={isSelected}
                 onSelect={() => {
                   if (!isSelected) {
@@ -1102,6 +1193,7 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
                 onChange={handleAssetChange}
                 onContextMenu={(e) => handleAssetContextMenu(e, asset)}
                 name="draggable"
+                pixelPerfect={false}
               />
             );
           })}
@@ -1147,6 +1239,14 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
           currentShapeType={currentShapeType}
           onClose={() => setContextMenu(null)}
           onAction={(action, target) => handleContextAction(action, target, contextMenu.position)}
+          extraActions={(() => {
+            const isAsset = contextMenu.target && contextMenu.target.src;
+            if (!isAsset) return [];
+            const isPlayer = contextMenu.target.isPlayer;
+            return isPlayer
+              ? [{ label: 'Unset as Player', action: 'unset-player' }]
+              : [{ label: 'Set as Player', action: 'set-player' }];
+          })()}
         />
       )}
       
@@ -1355,6 +1455,55 @@ function GridCanvas({ canvasAssets, setCanvasAssets, shapes, setShapes, drawingM
       >
         📝 {aiAssistant.isOpen ? 'Notepad Open' : 'AI Notepad'}
       </button>
+
+      {/* Game Mode Toggle Button */}
+      <button
+        onClick={() => setGameMode(g => !g)}
+        style={{
+          position: 'absolute',
+          top: 8,
+          right: 160,
+          background: gameMode ? '#ffd93d' : '#4ecdc4',
+          color: gameMode ? '#222' : 'white',
+          border: '2px solid #4ecdc4',
+          borderRadius: 8,
+          padding: '10px 18px',
+          fontWeight: 'bold',
+          fontSize: 14,
+          fontFamily: 'monospace',
+          cursor: 'pointer',
+          zIndex: 1002,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          transition: 'all 0.2s',
+        }}
+      >
+        {gameMode ? 'Exit Game Mode' : 'Playtest (Game Mode)'}
+      </button>
+
+      {/* Game Mode Indicator */}
+      {gameMode && (
+        <div style={{
+          position: 'absolute',
+          top: 60,
+          right: 160,
+          background: '#ffd93d',
+          color: '#222',
+          borderRadius: 8,
+          padding: '8px 16px',
+          fontWeight: 'bold',
+          fontSize: 13,
+          fontFamily: 'monospace',
+          zIndex: 1002,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        }}>
+          GAME MODE ACTIVE
+          {canvasAssets.findIndex(a => a.isPlayer) === -1 && (
+            <div style={{ color: '#ff6b6b', fontWeight: 'normal', fontSize: 12, marginTop: 4 }}>
+              No player asset set!<br/>Right-click an asset and choose "Set as Player".
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
